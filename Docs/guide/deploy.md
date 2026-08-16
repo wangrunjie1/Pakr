@@ -27,7 +27,6 @@ Pakr/
 └── app/                       # Android 项目源码
     └── src/main/java/com/webviewapp/
         ├── MainActivity.kt
-        ├── SplashActivity.kt
         ├── TopProgressBar.kt
         └── IOSSpinnerView.kt
 ```

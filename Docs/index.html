@@ -334,13 +334,6 @@ tr:hover td{background:var(--surface)}
         <p class="field-desc">上传 PNG 格式图片，建议尺寸 <strong>512×512px</strong>，不超过 2MB。未上传时使用默认图标。</p>
       </div>
     </div>
-    <div class="field-item">
-      <div class="field-num">6</div>
-      <div class="field-content">
-        <div class="field-name">启动屏图片 <code>可选</code></div>
-        <p class="field-desc">应用启动时显示的全屏图片，建议 <strong>1080×2340px</strong> 或等比例，PNG 格式。</p>
-      </div>
-    </div>
   </div>
 
   <h2>打包流程</h2>
@@ -380,7 +373,6 @@ tr:hover td{background:var(--surface)}
     <table>
       <tr><th>类型</th><th>尺寸</th><th>格式</th><th>大小限制</th></tr>
       <tr><td>应用图标</td><td>512×512px（最小 192×192px）</td><td>PNG</td><td>≤ 2 MB</td></tr>
-      <tr><td>启动屏图片</td><td>1080×2340px（推荐）</td><td>PNG</td><td>≤ 5 MB</td></tr>
     </table>
   </div>
 
@@ -561,24 +553,6 @@ tr:hover td{background:var(--surface)}
       <div class="field-content">
         <div class="field-name">常见错误</div>
         <p class="field-desc">上传 JPEG（不支持透明通道）、GIF、WebP 格式；图片尺寸过小（低于 48×48px）；图标内容四周有大面积白边导致在桌面显示过小。</p>
-      </div>
-    </div>
-  </div>
-
-  <h2>启动屏图片（Splash Screen）</h2>
-  <div class="field-group">
-    <div class="field-item">
-      <div class="field-num">!</div>
-      <div class="field-content">
-        <div class="field-name">规格要求</div>
-        <p class="field-desc">PNG 格式，推荐 <strong>1080×2340px</strong>（约 20:9 竖屏比例），文件不超过 <strong>5 MB</strong>。横屏设备会自动居中裁剪。</p>
-      </div>
-    </div>
-    <div class="field-item">
-      <div class="field-num">✓</div>
-      <div class="field-content">
-        <div class="field-name">最佳实践</div>
-        <p class="field-desc">启动屏仅在应用冷启动时显示约 1~2 秒，建议设计简洁，放置 Logo + 品牌色背景即可。重要信息不要放在边缘，防止被不同屏幕比例裁切。</p>
       </div>
     </div>
   </div>
@@ -827,7 +801,6 @@ base64 -i release.jks | tr -d '\n'</code></pre>
         <tr><td class="param-name">packageName</td><td class="param-type">string</td><td><span class="param-req">必填</span></td><td>包名，如 <code>com.example.app</code></td></tr>
         <tr><td class="param-name">versionName</td><td class="param-type">string</td><td><span class="param-opt">可选</span></td><td>版本号，默认 <code>1.0.0</code></td></tr>
         <tr><td class="param-name">iconBase64</td><td class="param-type">string</td><td><span class="param-opt">可选</span></td><td>图标 PNG 的 Base64 编码</td></tr>
-        <tr><td class="param-name">splashBase64</td><td class="param-type">string</td><td><span class="param-opt">可选</span></td><td>启动屏图片 PNG 的 Base64 编码</td></tr>
       </table>
       <h3>响应体（JSON）</h3>
       <pre><code>{
@@ -935,7 +908,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
   </div>
   <div class="faq-item" onclick="toggleFaq(this)">
     <div class="faq-q">APK 大小一般是多少？<span class="faq-arrow"></span></div>
-    <div class="faq-a"><p>不含自定义图标时约 3~4 MB，加入图标和启动屏后约 4~6 MB，远小于原生 APP。</p></div>
+    <div class="faq-a"><p>不含自定义图标时约 3~4 MB，远小于原生 APP。</p></div>
   </div>
 
   <div class="pager">
