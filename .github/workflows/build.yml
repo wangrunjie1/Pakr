@@ -16,7 +16,7 @@ on:
         required: true
         default: 1.0.0
       icon_url:
-        description: Icon Image URL (optional, leave empty to use repo logo.jpg)
+        description: Icon Image URL (optional, leave empty to use html2.link logo)
         required: false
         default: ''
 jobs:

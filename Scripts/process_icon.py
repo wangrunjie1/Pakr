@@ -2,7 +2,7 @@ import urllib.request, os, io
 from PIL import Image, ImageDraw
 
 url = os.environ.get('ICON_URL', '').strip()
-FALLBACK = 'logo.jpg'
+FALLBACK = 'html2link-logo.png'
 
 def load_fallback():
     if os.path.exists(FALLBACK):
@@ -18,7 +18,7 @@ def load_fallback():
 
 img = None
 if not url:
-    print('No icon URL provided, trying fallback logo.jpg.')
+    print('No icon URL provided, trying fallback html2link-logo.png.')
     img = load_fallback()
 else:
     try:
@@ -30,7 +30,7 @@ else:
         img = tmp.convert('RGBA')
         print(f'Image OK: {tmp.format} {tmp.size}')
     except Exception as e:
-        print(f'Download/open failed ({e}), trying fallback logo.jpg.')
+        print(f'Download/open failed ({e}), trying fallback html2link-logo.png.')
         img = load_fallback()
 
 if img is not None:

@@ -1,18 +1,18 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Pakr',
-  description: '网页一键打包 APK',
+  title: 'html2.link',
+  description: 'URL 一键生成 Android APK',
   lang: 'zh-CN',
   base: '/',
 
   head: [
-    ['link', { rel: 'icon', href: '/logo.jpg' }]
+    ['link', { rel: 'icon', href: '/html2link-logo.png' }]
   ],
 
   themeConfig: {
-    logo: '/logo.jpg',
-    siteTitle: 'Pakr',
+    logo: '/html2link-logo.png',
+    siteTitle: 'html2.link',
 
     nav: [
       { text: '指南', link: '/guide/introduction' },
@@ -44,12 +44,12 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ZhangShengFan/Pakr' }
+      { icon: 'github', link: 'https://github.com/wangrunjie1/Pakr' }
     ],
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2024 ZhangShengFan'
+      copyright: 'html2.link'
     },
 
     search: {
@@ -57,7 +57,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/ZhangShengFan/Pakr/edit/main/Docs/:path',
+      pattern: 'https://github.com/wangrunjie1/Pakr/edit/main/Docs/:path',
       text: '在 GitHub 上编辑此页'
     },
 

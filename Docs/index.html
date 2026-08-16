@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pakr 文档</title>
+<title>html2.link 文档</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 /* NAV */
 .topnav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;z-index:200;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
 .logo{display:flex;align-items:center;gap:9px;font-weight:650;font-size:15px;color:var(--text);text-decoration:none;flex-shrink:0}
-.logo-icon{width:28px;height:28px;background:var(--primary);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(5,150,105,.35)}
+.logo-image{width:28px;height:28px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .nav-spacer{flex:1}
 .nav-link{display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:var(--r-full);font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--border);transition:all .18s;flex-shrink:0;background:var(--bg)}
 .nav-link:hover{color:var(--text);border-color:var(--faint);box-shadow:var(--shadow-sm)}
@@ -246,18 +246,16 @@ tr:hover td{background:var(--surface)}
   <button class="menu-btn" onclick="toggleSidebar()" aria-label="菜单">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
-  <a class="logo" href="#" onclick="goPage('guide');return false">
-    <div class="logo-icon">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 12L8 3L13 12M5.5 8.5H10.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
-    </div>
-    Pakr
+  <a class="logo" href="#" onclick="goPage('guide');return false" aria-label="html2.link">
+    <img class="logo-image" src="/html2link-logo.png" alt="">
+    html2.link
   </a>
   <div class="nav-spacer"></div>
-  <a class="nav-link" href="https://apk.091224.xyz" target="_blank">
+  <a class="nav-link" href="https://html2.link" target="_blank">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     <span>在线体验</span>
   </a>
-  <a class="nav-link" href="https://github.com/ZhangShengFan/Pakr" target="_blank">
+  <a class="nav-link" href="https://github.com/wangrunjie1/Pakr" target="_blank">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
     <span>GitHub</span>
   </a>
@@ -363,7 +361,7 @@ tr:hover td{background:var(--surface)}
       <div class="step-left"><div class="step-num">4</div></div>
       <div class="step-body">
         <div class="step-title">下载 APK</div>
-        <div class="step-desc"><p>编译完成后，页面进度条跳至 100%，点击<strong>下载</strong>按钮即可保存 APK 到本地。文件通过 GitHub Release 分发。</p></div>
+        <div class="step-desc"><p>编译完成后，页面进度条跳至 100%，点击<strong>下载</strong>按钮即可保存 APK 到本地。文件通过 GitHub Actions Artifact 分发。</p></div>
       </div>
     </div>
   </div>
@@ -387,7 +385,7 @@ tr:hover td{background:var(--surface)}
 <!-- ════════════════ 架构说明 ════════════════ -->
 <div class="page" id="page-arch">
   <h1>架构说明</h1>
-  <p class="page-subtitle">Pakr 由三层无服务器组件构成，无需自己维护服务器。</p>
+  <p class="page-subtitle">html2.link 的 URL 转 APK 功能由三层无服务器组件构成，无需自己维护服务器。</p>
 
   <h2>三层结构</h2>
   <div class="arch">
@@ -417,9 +415,9 @@ tr:hover td{background:var(--surface)}
     <div class="arch-flow">
       <div class="arch-flow-item"><div class="arch-flow-num">1</div><div class="arch-flow-text">用户在 <strong>Pages 前端</strong>填写表单，点击「开始打包」</div></div>
       <div class="arch-flow-item"><div class="arch-flow-num">2</div><div class="arch-flow-text"><strong>Pages</strong> 向 <strong>Worker</strong>（<code>/api/build</code>）发送 POST 请求，携带表单数据</div></div>
-      <div class="arch-flow-item"><div class="arch-flow-num">3</div><div class="arch-flow-text"><strong>Worker</strong> 验证参数，用 <code>GH_TOKEN</code> 调用 GitHub API 触发 <code>build-apk</code> 工作流，返回 <code>run_id</code></div></div>
+      <div class="arch-flow-item"><div class="arch-flow-num">3</div><div class="arch-flow-text"><strong>Worker</strong> 验证参数，用 <code>GITHUB_TOKEN</code> 调用 GitHub API 触发 <code>build-apk</code> 工作流，返回 <code>run_id</code></div></div>
       <div class="arch-flow-item"><div class="arch-flow-num">4</div><div class="arch-flow-text"><strong>Pages 前端</strong>轮询 <code>/api/status?run_id=…</code>，Worker 代理查询 Actions 运行状态</div></div>
-      <div class="arch-flow-item"><div class="arch-flow-num">5</div><div class="arch-flow-text"><strong>Actions</strong> 编译完成，将 APK 上传至 GitHub Release</div></div>
+      <div class="arch-flow-item"><div class="arch-flow-num">5</div><div class="arch-flow-text"><strong>Actions</strong> 编译完成，将 APK 上传至 GitHub Actions Artifact</div></div>
       <div class="arch-flow-item"><div class="arch-flow-num">6</div><div class="arch-flow-text"><strong>Pages 前端</strong>收到 <code>completed</code> 状态，展示下载链接</div></div>
     </div>
   </div>
@@ -461,7 +459,7 @@ tr:hover td{background:var(--surface)}
       <div class="field-num">✓</div>
       <div class="field-content">
         <div class="field-name">最佳实践</div>
-        <p class="field-desc">优先使用 HTTPS，HTTP 网站在 Android 9+ 默认被阻止明文流量，需额外配置 <code>network_security_config</code>（Pakr 已自动处理）。建议填写登录后的首页而非登录页，避免用户每次打开都需要重新登录。</p>
+        <p class="field-desc">优先使用 HTTPS，HTTP 网站在 Android 9+ 默认被阻止明文流量，需额外配置 <code>network_security_config</code>（html2.link 已自动处理）。建议填写登录后的首页而非登录页，避免用户每次打开都需要重新登录。</p>
       </div>
     </div>
     <div class="field-item">
@@ -558,7 +556,7 @@ tr:hover td{background:var(--surface)}
   </div>
 
   <h2>WebView 配置项</h2>
-  <p>Pakr 打包时会自动注入以下 WebView 配置，无需手动设置：</p>
+  <p>html2.link 打包时会自动注入以下 WebView 配置，无需手动设置：</p>
   <div class="table-wrap">
     <table>
       <tr><th>配置项</th><th>值</th><th>说明</th></tr>
@@ -608,7 +606,7 @@ tr:hover td{background:var(--surface)}
       <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
       <div class="step-body">
         <div class="step-title">Fork 仓库</div>
-        <div class="step-desc"><p>打开 <a href="https://github.com/ZhangShengFan/Pakr" target="_blank">ZhangShengFan/Pakr</a>，点击右上角 <strong>Fork</strong>，复制到你自己的账号下。</p></div>
+        <div class="step-desc"><p>打开 <a href="https://github.com/wangrunjie1/Pakr" target="_blank">wangrunjie1/Pakr</a>，点击右上角 <strong>Fork</strong>，复制到你自己的账号下。</p></div>
       </div>
     </div>
     <div class="step">
@@ -623,14 +621,13 @@ tr:hover td{background:var(--surface)}
       <div class="step-body">
         <div class="step-title">配置 GitHub Secrets</div>
         <div class="step-desc">
-          <p>仓库 → <strong>Settings → Secrets and variables → Actions → New repository secret</strong>，添加 5 个 Secret：</p>
+          <p>仓库 → <strong>Settings → Secrets and variables → Actions → New repository secret</strong>，添加 4 个 Secret：</p>
           <div class="table-wrap"><table>
             <tr><th>名称</th><th>值</th></tr>
             <tr><td><code>KEYSTORE_BASE64</code></td><td>上一步复制的 Base64 字符串</td></tr>
             <tr><td><code>KEYSTORE_PASSWORD</code></td><td>gen-keystore 时设置的密码</td></tr>
             <tr><td><code>KEY_ALIAS</code></td><td><code>release</code></td></tr>
             <tr><td><code>KEY_PASSWORD</code></td><td>同 KEYSTORE_PASSWORD</td></tr>
-            <tr><td><code>GH_PAT</code></td><td>GitHub PAT（需 <code>repo</code> + <code>workflow</code> 权限）</td></tr>
           </table></div>
         </div>
       </div>
@@ -650,7 +647,7 @@ tr:hover td{background:var(--surface)}
           <p>Pages 项目 → <strong>Settings → Environment variables → Add variable</strong>：</p>
           <div class="table-wrap"><table>
             <tr><th>变量名</th><th>值</th></tr>
-            <tr><td><code>GH_TOKEN</code></td><td>与 GH_PAT 相同</td></tr>
+            <tr><td><code>GITHUB_TOKEN</code></td><td>你的 GitHub PAT（需 <code>repo</code> + <code>workflow</code> 权限）</td></tr>
           </table></div>
           <div class="callout callout-warn"><div class="icon-warn"></div><p>添加后需在 Deployments 页手动 <strong>Retry deployment</strong> 一次才生效。</p></div>
         </div>
@@ -713,7 +710,6 @@ base64 -i release.jks | tr -d '\n'</code></pre>
     <tr><td><code>KEYSTORE_PASSWORD</code></td><td>Keystore 密码</td><td><code>myPassword123</code></td></tr>
     <tr><td><code>KEY_ALIAS</code></td><td>Key 别名</td><td><code>release</code></td></tr>
     <tr><td><code>KEY_PASSWORD</code></td><td>Key 密码（同 Keystore 密码）</td><td><code>myPassword123</code></td></tr>
-    <tr><td><code>GH_PAT</code></td><td>Personal Access Token</td><td><code>ghp_xxxxxxxxxxxx</code></td></tr>
   </table></div>
 
   <div class="pager">
@@ -725,7 +721,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
 <!-- ════════════════ Cloudflare Pages ════════════════ -->
 <div class="page" id="page-cfpages">
   <h1>部署到 Cloudflare Pages</h1>
-  <p class="page-subtitle">Pakr 是纯静态文件，直接托管在 Cloudflare Pages，无需额外服务器。</p>
+  <p class="page-subtitle">html2.link 的 URL 转 APK 页面是纯静态文件，直接托管在 Cloudflare Pages，无需额外服务器。</p>
 
   <div class="steps">
     <div class="step">
@@ -754,7 +750,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
           <p>部署完成 → <strong>Settings → Environment variables → Add variable</strong>：</p>
           <div class="table-wrap"><table>
             <tr><th>变量名</th><th>值</th></tr>
-            <tr><td><code>GH_TOKEN</code></td><td>与 GH_PAT 相同</td></tr>
+            <tr><td><code>GITHUB_TOKEN</code></td><td>你的 GitHub PAT（需 <code>repo</code> + <code>workflow</code> 权限）</td></tr>
           </table></div>
           <div class="callout callout-warn"><div class="icon-warn"></div><p>添加后需在 <strong>Deployments</strong> 手动触发 <strong>Retry deployment</strong> 才生效。</p></div>
         </div>
@@ -851,7 +847,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
       <span class="api-desc">获取最近打包记录</span>
     </div>
     <div class="api-body">
-      <p>返回最近 20 条，数据来源为 GitHub Releases。</p>
+      <p>返回最近 20 条，数据来源为 GitHub Actions Artifacts。</p>
       <h3>响应体（JSON）</h3>
       <pre><code>[
   {
@@ -880,7 +876,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
 
   <div class="faq-item" onclick="toggleFaq(this)">
     <div class="faq-q">打包失败怎么排查？<span class="faq-arrow"></span></div>
-    <div class="faq-a"><p>进入 Fork 仓库 → <strong>Actions</strong>，找到对应运行记录查看详细日志。常见原因：</p><ul><li><code>GH_PAT</code> 权限不足，需 <code>repo</code> + <code>workflow</code></li><li>Keystore Secrets 缺失或填写错误</li><li>目标网址不可访问（防火墙或需登录）</li><li>包名格式错误（需反向域名格式）</li></ul></div>
+    <div class="faq-a"><p>进入 Fork 仓库 → <strong>Actions</strong>，找到对应运行记录查看详细日志。常见原因：</p><ul><li><code>GITHUB_TOKEN</code> 权限不足，需 <code>repo</code> + <code>workflow</code></li><li>Keystore Secrets 缺失或填写错误</li><li>目标网址不可访问（防火墙或需登录）</li><li>包名格式错误（需反向域名格式）</li></ul></div>
   </div>
   <div class="faq-item" onclick="toggleFaq(this)">
     <div class="faq-q">安装后无法升级覆盖？<span class="faq-arrow"></span></div>
@@ -904,7 +900,7 @@ base64 -i release.jks | tr -d '\n'</code></pre>
   </div>
   <div class="faq-item" onclick="toggleFaq(this)">
     <div class="faq-q">在哪里存储？<span class="faq-arrow"></span></div>
-    <div class="faq-a"><p>历史记录保存在浏览器 LocalStorage，清除缓存或换设备后会丢失。APK 文件本身存储在 GitHub Releases，只要仓库存在就不会消失。</p></div>
+    <div class="faq-a"><p>历史记录保存在浏览器 LocalStorage，清除缓存或换设备后会丢失。APK 文件本身存储在 GitHub Actions Artifacts，构建产物按工作流保留策略保存。</p></div>
   </div>
   <div class="faq-item" onclick="toggleFaq(this)">
     <div class="faq-q">APK 大小一般是多少？<span class="faq-arrow"></span></div>

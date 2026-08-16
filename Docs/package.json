@@ -1,5 +1,5 @@
 {
-  "name": "pakr-docs",
+  "name": "html2link-docs",
   "version": "1.0.0",
   "scripts": {
     "docs:dev": "vitepress dev",

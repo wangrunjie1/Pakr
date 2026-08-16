@@ -5,7 +5,7 @@
 进入你 Fork 的仓库 → **Actions**，找到对应的 workflow 运行记录，查看详细日志定位错误。
 
 常见原因：
-- `GH_PAT` 权限不足，需要 `repo` + `workflow` 两个权限
+- `GITHUB_TOKEN` 权限不足，需要 `repo` + `workflow` 两个权限
 - Keystore Secrets 配置错误或未配置
 - 目标网址无法访问
 

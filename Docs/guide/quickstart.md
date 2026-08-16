@@ -1,6 +1,6 @@
 # 快速开始
 
-本页面介绍如何在 3 分钟内完成部署，开始使用 Pakr。
+本页面介绍如何在 3 分钟内完成部署，开始使用 html2.link 的 URL 转 APK 功能。
 
 ## 前置要求
 
@@ -9,7 +9,7 @@
 
 ## 第一步：Fork 仓库
 
-点击右上角 **Fork**，将 [ZhangShengFan/Pakr](https://github.com/ZhangShengFan/Pakr) Fork 到你自己的账号下。
+点击右上角 **Fork**，将 [wangrunjie1/Pakr](https://github.com/wangrunjie1/Pakr) Fork 到你自己的账号下。
 
 ## 第二步：生成签名 Keystore
 
@@ -27,7 +27,6 @@
 | `KEYSTORE_PASSWORD` | Keystore 密码（gen-keystore 时设置的） |
 | `KEY_ALIAS` | Key 别名（默认 `release`） |
 | `KEY_PASSWORD` | Key 密码（同 Keystore 密码） |
-| `GH_PAT` | GitHub PAT（需要 `repo` + `workflow` 权限） |
 
 ## 第四步：部署到 Cloudflare Pages
 
@@ -46,7 +45,7 @@
    |--------|----|
    | `GITHUB_OWNER` | 你的 GitHub 用户名 |
    | `GITHUB_REPO` | `Pakr` |
-   | `GH_PAT` | 你的 GitHub PAT |
+   | `GITHUB_TOKEN` | 你的 GitHub PAT |
 
 4. 点击 **Save and Deploy**，等待部署完成。
 

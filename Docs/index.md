@@ -2,19 +2,19 @@
 layout: home
 
 hero:
-  name: "Pakr"
+  name: "html2.link"
   text: "网页一键打包 APK"
   tagline: 填写网址和应用信息，3~5 分钟自动生成可安装的 Android APK，无需本地环境，全程云端构建。
   image:
-    src: /logo.jpg
-    alt: Pakr
+    src: /html2link-logo.png
+    alt: html2.link
   actions:
     - theme: brand
       text: 快速开始
       link: /guide/quickstart
     - theme: alt
       text: 在线体验
-      link: https://apk.091224.xyz
+      link: https://html2.link
 
 features:
   - icon: 🔨

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Pakr — 网页一键打包 APK
+# html2.link — URL 一键生成 APK
 
 **填写网址和应用信息，3~5 分钟自动生成可安装的 Android APK。**  
 无需本地环境，全程云端完成编译、签名、打包。
@@ -11,7 +11,7 @@
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub_Actions-2088ff.svg?logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![Linux Do](https://img.shields.io/badge/Linux%20Do-Community-ffb003?style=flat&logo=data:image/svg%2Bxml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDEyMCAxMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNsaXBQYXRoIGlkPSJhIj48Y2lyY2xlIGN4PSI2MCIgY3k9IjYwIiByPSI0NyIvPjwvY2xpcFBhdGg+PGNpcmNsZSBmaWxsPSIjZjBmMGYwIiBjeD0iNjAiIGN5PSI2MCIgcj0iNTAiLz48cmVjdCBmaWxsPSIjMWMxYzFlIiBjbGlwLXBhdGg9InVybCgjYSkiIHg9IjEwIiB5PSIxMCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIzMCIvPjxyZWN0IGZpbGw9IiNmMGYwZjAiIGNsaXAtcGF0aD0idXJsKCNhKSIgeD0iMTAiIHk9IjQwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIi8+PHJlY3QgZmlsbD0iI2ZmYjAwMyIgY2xpcC1wYXRoPSJ1cmwoI2EpIiB4PSIxMCIgeT0iODAiIHdpZHRoPSIxMDAiIGhlaWdodD0iMzAiLz48L3N2Zz4=)](https://linux.do)
 
-**[🚀 在线体验](https://apk.091224.xyz)　·　[📖 使用文档](https://apk.091224.xyz/Docs)**
+**[🚀 在线体验](https://html2.link)　·　[📖 使用文档](https://html2.link/Docs)**
 
 </div>
 
@@ -74,7 +74,7 @@ Pakr/
 
 ## 快速部署
 
-> 完整教程见 **[📖 文档 → 快速部署](https://apk.091224.xyz/Docs)**
+> 完整教程见 **[📖 文档 → 快速部署](https://html2.link/Docs)**
 
 ### 前置要求
 
@@ -101,7 +101,6 @@ Pakr/
 | `KEYSTORE_PASSWORD` | Keystore 密码 |
 | `KEY_ALIAS` | Key 别名（默认 `release`） |
 | `KEY_PASSWORD` | Key 密码（同 Keystore 密码） |
-| `GH_PAT` | GitHub PAT（需要 `repo` + `workflow` 权限） |
 
 ### 第四步 — 部署到 Cloudflare Pages
 
@@ -120,7 +119,7 @@ Pakr/
    |--------|----|
    | `GITHUB_OWNER` | 你的 GitHub 用户名 |
    | `GITHUB_REPO` | `Pakr` |
-   | `GH_PAT` | 你的 GitHub PAT |
+   | `GITHUB_TOKEN` | 你的 GitHub PAT |
 
 4. **Save and Deploy**，部署完成后即可访问。
 

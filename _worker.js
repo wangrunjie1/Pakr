@@ -304,10 +304,12 @@ async function extractApkFromZip(buf) {
 }
 
 function gh(env, path, opts = {}) {
+  const token = env.GITHUB_TOKEN || env.GH_TOKEN || env.GH_PAT;
+  if (!token) throw new Error('Missing GITHUB_TOKEN');
   return fetch(`https://api.github.com${path}`, {
     ...opts,
     headers: {
-      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'APK-Builder-CF-Worker/1.0',

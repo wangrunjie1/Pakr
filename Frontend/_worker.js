@@ -39,7 +39,7 @@ export default {
 
 async function handleBuild(request, env) {
   const { app_url, app_name, package_name, version_name, icon_url } = await request.json();
-  if (!app_url || !app_name || !package_name || !version_name || !icon_url)
+  if (!app_url || !app_name || !package_name || !version_name)
     return json({ error: 'Missing required fields' }, 400);
   const pkgRe = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2,}$/;
   if (!pkgRe.test(package_name))
@@ -49,7 +49,7 @@ async function handleBuild(request, env) {
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/build.yml/dispatches`,
     { method: 'POST', body: JSON.stringify({
         ref: 'main',
-        inputs: { app_url, app_name, package_name, version_name, icon_url }
+        inputs: { app_url, app_name, package_name, version_name, icon_url: icon_url || '' }
     })}
   );
   if (r.status !== 204) return json({ error: 'Trigger failed', detail: await r.text() }, 500);
@@ -246,11 +246,13 @@ async function extractApkFromZip(buf) {
   return null;
 }
 
-const gh = (env, path, opts = {}) =>
-  fetch(`${GH}${path}`, {
+const gh = (env, path, opts = {}) => {
+  const token = env.GITHUB_TOKEN || env.GH_TOKEN || env.GH_PAT;
+  if (!token) throw new Error('Missing GITHUB_TOKEN');
+  return fetch(`${GH}${path}`, {
     ...opts,
     headers: {
-      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'APK-Builder-CF-Worker/1.0',
@@ -258,6 +260,7 @@ const gh = (env, path, opts = {}) =>
       ...(opts.headers || {}),
     }
   });
+};
 
 const json  = (d, s = 200) => new Response(JSON.stringify(d), {
   status: s, headers: { 'Content-Type': 'application/json' }

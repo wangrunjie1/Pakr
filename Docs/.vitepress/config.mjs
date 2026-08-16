@@ -1,17 +1,17 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Pakr',
-  description: 'One-click website to APK packaging',
+  title: 'html2.link',
+  description: 'URL 一键生成 Android APK',
   lang: 'zh-CN',
   lastUpdated: true,
   cleanUrls: true,
   ignoreDeadLinks: true,
   themeConfig: {
-    siteTitle: 'Pakr Docs',
+    siteTitle: 'html2.link 文档',
     nav: [
       { text: '首页', link: '/' },
-      { text: '在线体验', link: 'https://apk.091224.xyz' }
+      { text: '在线体验', link: 'https://html2.link' }
     ],
     sidebar: {
       '/': [
@@ -33,7 +33,7 @@ export default defineConfig({
       ]
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ZhangShengFan/Pakr' }
+      { icon: 'github', link: 'https://github.com/wangrunjie1/Pakr' }
     ],
     outline: {
       level: [2, 3],
