@@ -88,7 +88,7 @@ async function handleStatus(request, env) {
       const created = Date.parse(r.created_at || 0);
       return Number.isFinite(created) && created >= (baseTs - 15000);
     });
-    if (!matched) return json({ status: 'queued', waiting_run_id: true, build_id: buildId, dispatched_at });
+    if (!matched) return json({ status: 'queued', waiting_run_id: true, build_id: buildId, dispatched_at: dispatchedAt });
     runId = matched.id;
   }
 
@@ -341,5 +341,4 @@ function cors(res, env) {
   return new Response(res.body, { status: res.status, headers: h });
 }
 // force-redeploy: pages-advanced-mode-fix-20260502-1137
-
 
