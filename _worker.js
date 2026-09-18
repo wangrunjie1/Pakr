@@ -304,7 +304,9 @@ async function extractApkFromZip(buf) {
 }
 
 function gh(env, path, opts = {}) {
-  const token = env.GITHUB_TOKEN || env.GH_TOKEN || env.GH_PAT;
+  const token = [env.GITHUB_TOKEN, env.GH_TOKEN, env.GH_PAT]
+    .map(value => String(value || '').trim())
+    .find(Boolean);
   if (!token) throw new Error('Missing GITHUB_TOKEN');
   return fetch(`https://api.github.com${path}`, {
     ...opts,
@@ -341,4 +343,3 @@ function cors(res, env) {
   return new Response(res.body, { status: res.status, headers: h });
 }
 // force-redeploy: pages-advanced-mode-fix-20260502-1137
-
