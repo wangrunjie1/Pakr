@@ -101,6 +101,14 @@ input:-webkit-autofill,input:-webkit-autofill:focus{
   -webkit-box-shadow:0 0 0 100px #fafafa inset!important;
   -webkit-text-fill-color:var(--text)!important}
 input.err{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,0.08)}
+.toggle-field{display:flex;flex-direction:column;gap:6px}
+.toggle-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text)}
+.toggle-label input[type="checkbox"]{
+  appearance:auto;width:16px;height:16px;margin:0;padding:0;flex:0 0 auto;
+  accent-color:var(--accent);border:initial;background:initial;box-shadow:none;cursor:pointer;
+}
+.toggle-label input[type="checkbox"]:focus{box-shadow:none}
+.toggle-hint{font-size:11px;line-height:1.5;color:var(--muted);margin-left:24px}
 
 .btn{
   width:100%;height:46px;margin-top:4px;
@@ -486,6 +494,14 @@ footer{border-top-color:var(--border);color:var(--faint)}
             </div>
           </div>
 
+          <div class="toggle-field">
+            <label class="toggle-label" for="f_pull_refresh">
+              <input type="checkbox" id="f_pull_refresh">
+              <span>允许 App 内下拉刷新</span>
+            </label>
+            <div class="toggle-hint">默认关闭；开启后，页面位于顶部时下拉可以重新加载网页。</div>
+          </div>
+
         <button type="button" class="btn" id="submitBtn" onclick="handleBuildClick()">
           <svg class="btn-icon" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           开始打包
@@ -707,7 +723,7 @@ async function handleBuildClick(){
     package_name: document.getElementById('f_pkg').value.trim(),
     version_name: document.getElementById('f_ver').value.trim(),
     icon_url:      document.getElementById('f_icon').value.trim(),
-
+    pull_to_refresh: document.getElementById('f_pull_refresh').checked,
   };
 
   setBusy(true);
@@ -1016,9 +1032,11 @@ function renderDownloadButtons(data, runId){
 }
 
 const SAVE_KEYS = ['f_url','f_name','f_pkg','f_ver','f_icon'];
+const CHECKBOX_KEYS = ['f_pull_refresh'];
 function saveForm(){
   const saved = {};
   SAVE_KEYS.forEach(id => { saved[id] = document.getElementById(id).value; });
+  CHECKBOX_KEYS.forEach(id => { saved[id] = document.getElementById(id).checked; });
   localStorage.setItem('apkbuilder_form', JSON.stringify(saved));
 }
 function loadForm(){
@@ -1027,9 +1045,12 @@ function loadForm(){
     SAVE_KEYS.forEach(id => {
       if(saved[id]) document.getElementById(id).value = saved[id];
     });
+    CHECKBOX_KEYS.forEach(id => {
+      if(typeof saved[id] === 'boolean') document.getElementById(id).checked = saved[id];
+    });
   } catch(e){}
 }
-SAVE_KEYS.forEach(id => {
+([...SAVE_KEYS, ...CHECKBOX_KEYS]).forEach(id => {
   document.getElementById(id).addEventListener('input', saveForm);
 });
 loadForm();

@@ -39,7 +39,7 @@ function isSafeUrl(u) {
 }
 
 async function handleBuild(request, env) {
-  const { app_url, app_name, package_name, version_name, icon_url } = await request.json();
+  const { app_url, app_name, package_name, version_name, icon_url, pull_to_refresh } = await request.json();
   const buildId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   if (!app_url || !app_name || !package_name || !version_name)
     return json({ error: 'Missing required fields' }, 400);
@@ -50,6 +50,7 @@ async function handleBuild(request, env) {
     return json({ error: 'Invalid or unsafe app_url' }, 400);
   if (icon_url && !isSafeUrl(icon_url))
     return json({ error: 'Invalid or unsafe icon_url' }, 400);
+  const allowPullToRefresh = pull_to_refresh === true || pull_to_refresh === 'true';
   // 校验包名各段不能是 Java 关键字
   const JAVA_KEYWORDS = new Set(["abstract","assert","boolean","break","byte","case","catch","char","class","const","continue","default","do","double","else","enum","extends","final","finally","float","for","goto","if","implements","import","instanceof","int","interface","long","native","new","package","private","protected","public","return","short","static","strictfp","super","switch","synchronized","this","throw","throws","transient","try","void","volatile","while"]);
   const invalidSeg = package_name.split('.').find(seg => JAVA_KEYWORDS.has(seg));
@@ -63,7 +64,14 @@ async function handleBuild(request, env) {
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/build.yml/dispatches`,
     { method: 'POST', body: JSON.stringify({
         ref: 'main',
-        inputs: { app_url, app_name, package_name, version_name, icon_url: icon_url || '' }
+        inputs: {
+          app_url,
+          app_name,
+          package_name,
+          version_name,
+          icon_url: icon_url || '',
+          pull_to_refresh: allowPullToRefresh ? 'true' : 'false',
+        }
     })}
   );
   if (r.status !== 204) return json({ error: 'Trigger failed', detail: await r.text() }, 500);

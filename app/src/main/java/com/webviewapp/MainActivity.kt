@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var overlayVisible = false
+    private val pullToRefreshEnabled = {{PULL_TO_REFRESH_ENABLED}}
 
     private val dotsFrames = arrayOf("", ".", "..", "...")
     private var dotsIndex = 0
@@ -88,23 +89,26 @@ class MainActivity : AppCompatActivity() {
         spinner     = findViewById(R.id.spinner)
         loadingText = findViewById(R.id.loadingText)
         swipeRefresh = findViewById(R.id.swipeRefresh)
-        swipeRefresh.setColorSchemeColors(
-            android.graphics.Color.parseColor("#6366F1")
-        )
-        // 触发距离设为 140dp（接近 Chrome），避免轻划误触
-        val density = resources.displayMetrics.density
-        val triggerDp = 120
-        try {
-            val field = androidx.swiperefreshlayout.widget.SwipeRefreshLayout::class.java
-                .getDeclaredField("mTotalDragDistance")
-            field.isAccessible = true
-            field.setFloat(swipeRefresh, triggerDp * density)
-        } catch (_: Exception) {}
-        swipeRefresh.setProgressViewOffset(false, 0, (triggerDp * density).toInt())
-        swipeRefresh.setOnRefreshListener {
-            forceShowOverlay()
-            // 稍等 50ms 再 reload，确保 overlay 已完全显示后才清空页面
-            handler.postDelayed({ webView.reload() }, 50)
+        swipeRefresh.isEnabled = pullToRefreshEnabled
+        if (pullToRefreshEnabled) {
+            swipeRefresh.setColorSchemeColors(
+                android.graphics.Color.parseColor("#6366F1")
+            )
+            // 触发距离设为 120dp，避免轻划误触
+            val density = resources.displayMetrics.density
+            val triggerDp = 120
+            try {
+                val field = androidx.swiperefreshlayout.widget.SwipeRefreshLayout::class.java
+                    .getDeclaredField("mTotalDragDistance")
+                field.isAccessible = true
+                field.setFloat(swipeRefresh, triggerDp * density)
+            } catch (_: Exception) {}
+            swipeRefresh.setProgressViewOffset(false, 0, (triggerDp * density).toInt())
+            swipeRefresh.setOnRefreshListener {
+                forceShowOverlay()
+                // 稍等 50ms 再 reload，确保 overlay 已完全显示后才清空页面
+                handler.postDelayed({ webView.reload() }, 50)
+            }
         }
         showOverlay()
         setupWebView()
@@ -330,39 +334,36 @@ class MainActivity : AppCompatActivity() {
         }, "_pakrBridge")
         // UA：移动版 Chrome（无 wv 标识），上传时临时切桌面UA
         webView.settings.userAgentString = MOBILE_UA
-        // 实时控制：WebView 不在顶部时禁用下拉刷新，防止滚动误触和打断 CF 验证
-        // 防误触：只有页面静止在顶部时才启用下拉刷新
-        var lastScrollY = 0
-        var isTouching = false
-        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            lastScrollY = scrollY
-            if (!isTouching) {
-                // 手指不在屏幕上时（fling 中），页面不在顶部就禁用
-                if (scrollY > 0) swipeRefresh.isEnabled = false
-            }
-        }
-        webView.setOnTouchListener { _, event ->
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    isTouching = true
-                    // 手指按下时根据当前位置决定是否启用
-                    swipeRefresh.isEnabled = (lastScrollY == 0)
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    // 滑动过程中不在顶部就立即禁用
-                    if (lastScrollY > 0) swipeRefresh.isEnabled = false
-                }
-                android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL -> {
-                    isTouching = false
-                    // 手指抬起后延迟 300ms 再判断（等 fling 惯性结束）
+        if (pullToRefreshEnabled) {
+            // WebView 不在顶部时禁用下拉刷新，避免滚动误触
+            var lastScrollY = 0
+            var isTouching = false
+            webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                lastScrollY = scrollY
+                if (!isTouching && scrollY > 0) {
                     swipeRefresh.isEnabled = false
-                    handler.postDelayed({
-                        swipeRefresh.isEnabled = (lastScrollY == 0)
-                    }, 300)
                 }
             }
-            false
+            webView.setOnTouchListener { _, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        isTouching = true
+                        swipeRefresh.isEnabled = (lastScrollY == 0)
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        if (lastScrollY > 0) swipeRefresh.isEnabled = false
+                    }
+                    android.view.MotionEvent.ACTION_UP,
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        isTouching = false
+                        swipeRefresh.isEnabled = false
+                        handler.postDelayed({
+                            swipeRefresh.isEnabled = (lastScrollY == 0)
+                        }, 300)
+                    }
+                }
+                false
+            }
         }
         webView.loadUrl(APP_URL)
     }

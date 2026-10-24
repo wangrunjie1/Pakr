@@ -38,18 +38,26 @@ export default {
 };
 
 async function handleBuild(request, env) {
-  const { app_url, app_name, package_name, version_name, icon_url } = await request.json();
+  const { app_url, app_name, package_name, version_name, icon_url, pull_to_refresh } = await request.json();
   if (!app_url || !app_name || !package_name || !version_name)
     return json({ error: 'Missing required fields' }, 400);
   const pkgRe = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2,}$/;
   if (!pkgRe.test(package_name))
     return json({ error: 'Invalid package name' }, 400);
+  const allowPullToRefresh = pull_to_refresh === true || pull_to_refresh === 'true';
 
   const r = await gh(env,
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/build.yml/dispatches`,
     { method: 'POST', body: JSON.stringify({
         ref: 'main',
-        inputs: { app_url, app_name, package_name, version_name, icon_url: icon_url || '' }
+        inputs: {
+          app_url,
+          app_name,
+          package_name,
+          version_name,
+          icon_url: icon_url || '',
+          pull_to_refresh: allowPullToRefresh ? 'true' : 'false',
+        }
     })}
   );
   if (r.status !== 204) return json({ error: 'Trigger failed', detail: await r.text() }, 500);
