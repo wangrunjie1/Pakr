@@ -253,6 +253,7 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 fileChooserCallbackRef?.onReceiveValue(null)
                 fileChooserCallbackRef = filePathCallback
+                cameraImageUri = null
                 // 上传前切换为桌面UA，确保ChatGPT不拦截上传请求
                 webView.settings.userAgentString = DESKTOP_UA
                 try {
@@ -272,7 +273,14 @@ class MainActivity : AppCompatActivity() {
                     }
                     val fileIntent = fileChooserParams.createIntent()
                     val chooser = android.content.Intent.createChooser(fileIntent, "选择图片").apply {
-                        putExtra(android.content.Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
+                        // GIF-only uploads cannot be satisfied by a camera JPEG.
+                        val accepted = fileChooserParams.acceptTypes.flatMap { it.split(",") }
+                            .map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                        if (accepted.isEmpty() || accepted.any {
+                                it in setOf("*/*", "image/*", "image/jpeg", "image/jpg", ".jpg", ".jpeg")
+                            }) {
+                            putExtra(android.content.Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
+                        }
                     }
                     startActivityForResult(chooser, FILE_CHOOSER_REQUEST)
                 } catch (e: Exception) {
@@ -529,15 +537,17 @@ class MainActivity : AppCompatActivity() {
     private var fileChooserCallbackRef: ValueCallback<Array<Uri>>? = null
     private var cameraImageUri: Uri? = null
 
+    private fun hasCameraUpload(uri: Uri): Boolean = try {
+        contentResolver.openInputStream(uri)?.use { it.read() != -1 } ?: false
+    } catch (_: Exception) { false }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == FILE_CHOOSER_REQUEST) {
             val results: Array<Uri>? = if (resultCode == RESULT_OK) {
                 when {
-                    // 相机拍照：data 为 null 或 data.data 为 null
-                    (data == null || data.data == null) && cameraImageUri != null -> {
-                        arrayOf(cameraImageUri!!)
-                    }
+                    // Multi-select may have clipData without data.data. Always prefer
+                    // actual selected files over the unused camera placeholder.
                     // 多选文件
                     data?.clipData != null -> {
                         val clip = data.clipData!!
@@ -552,6 +562,11 @@ class MainActivity : AppCompatActivity() {
                         val uri = data.data!!
                         try { contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
                         arrayOf(uri)
+                    }
+                    // A camera intent normally returns no data. Accept its URI only
+                    // after the camera has actually written non-empty bytes.
+                    cameraImageUri != null && hasCameraUpload(cameraImageUri!!) -> {
+                        arrayOf(cameraImageUri!!)
                     }
                     else -> null
                 }
