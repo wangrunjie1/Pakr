@@ -63,7 +63,10 @@ Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.web.web
 Expand-Archive -LiteralPath $sdkArchive -DestinationPath $sdk -Force
 
 $buildDirectory = Join-Path $env:RUNNER_TEMP 'pakr-windows-build'
-& cmake -S Windows -B $buildDirectory -G 'Visual Studio 17 2022' -A x64 "-DPAKR_WEBVIEW2_SDK=$sdk" "-DPAKR_RESOURCES=$resourcePath"
+# CMake re-parses source paths, where Windows backslashes can become escapes.
+$sdkForCmake = $sdk.Replace('\', '/')
+$resourcesForCmake = $resourcePath.Replace('\', '/')
+& cmake -S Windows -B $buildDirectory -G 'Visual Studio 17 2022' -A x64 "-DPAKR_WEBVIEW2_SDK:PATH=$sdkForCmake" "-DPAKR_RESOURCES:FILEPATH=$resourcesForCmake"
 if ($LASTEXITCODE -ne 0) { throw "Windows app configuration failed ($LASTEXITCODE)" }
 & cmake --build $buildDirectory --config Release
 if ($LASTEXITCODE -ne 0) { throw "Windows app compilation failed ($LASTEXITCODE)" }
