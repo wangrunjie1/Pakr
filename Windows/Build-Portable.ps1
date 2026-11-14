@@ -22,22 +22,53 @@ $iconPath = Join-Path $env:RUNNER_TEMP 'Pakr.App.ico'
 & python Windows/Process-Icon.py $iconPath
 if ($LASTEXITCODE -ne 0) { throw 'Icon processing failed' }
 
-$config = [System.Xml.XmlDocument]::new()
-$app = $config.AppendChild($config.CreateElement('App'))
-$app.AppendChild($config.CreateElement('Url')).InnerText = $target.AbsoluteUri
-$app.AppendChild($config.CreateElement('Name')).InnerText = $env:PAKR_APP_NAME
-$app.AppendChild($config.CreateElement('Id')).InnerText = $env:PAKR_APP_ID
-$configPath = Join-Path $env:RUNNER_TEMP 'Pakr.AppConfig.xml'
-$config.Save($configPath)
+$configPath = Join-Path $env:RUNNER_TEMP 'Pakr.AppConfig.bin'
+$appName = $env:PAKR_APP_NAME.Trim()
+$config = @($target.AbsoluteUri, $appName, $env:PAKR_APP_ID) -join "`n"
+[IO.File]::WriteAllBytes($configPath, [Text.Encoding]::Unicode.GetBytes($config))
 
-$publishArgs = @('publish', 'Windows/Pakr.Windows.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
-    '-o', 'windows-publish', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:IncludeAllContentForSelfExtract=true', '-p:EnableCompressionInSingleFile=true',
-    "-p:ApplicationIcon=$iconPath", "-p:PakrConfigFile=$configPath", "-p:Version=$($env:PAKR_VERSION)")
-& dotnet @publishArgs
+$version = ($env:PAKR_VERSION.Split('.') | ForEach-Object { [int]$_ }) -join ','
+$resourcePath = Join-Path $env:RUNNER_TEMP 'Pakr.App.rc'
+$iconResource = $iconPath.Replace('\', '/')
+$configResource = $configPath.Replace('\', '/')
+@"
+#pragma code_page(65001)
+1 ICON "$iconResource"
+101 RCDATA "$configResource"
+1 VERSIONINFO
+FILEVERSION $version,0
+PRODUCTVERSION $version,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "$appName\0"
+      VALUE "ProductName", "$appName\0"
+      VALUE "FileVersion", "$($env:PAKR_VERSION)\0"
+      VALUE "ProductVersion", "$($env:PAKR_VERSION)\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+"@ | Set-Content -LiteralPath $resourcePath -Encoding utf8BOM
+
+$sdkVersion = '1.0.3537.50'
+$sdk = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$sdkVersion"
+$sdkArchive = "$sdk.zip"
+Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$sdkVersion/microsoft.web.webview2.$sdkVersion.nupkg" -OutFile $sdkArchive -TimeoutSec 60
+Expand-Archive -LiteralPath $sdkArchive -DestinationPath $sdk -Force
+
+$buildDirectory = Join-Path $env:RUNNER_TEMP 'pakr-windows-build'
+& cmake -S Windows -B $buildDirectory -G 'Visual Studio 17 2022' -A x64 "-DPAKR_WEBVIEW2_SDK=$sdk" "-DPAKR_RESOURCES=$resourcePath"
+if ($LASTEXITCODE -ne 0) { throw "Windows app configuration failed ($LASTEXITCODE)" }
+& cmake --build $buildDirectory --config Release
 if ($LASTEXITCODE -ne 0) { throw "Windows app compilation failed ($LASTEXITCODE)" }
 
 # The artifact prefix distinguishes portable builds from historical installers.
-$fileName = "Pakr-Portable-$($env:PAKR_APP_NAME.Trim()).exe"
+$fileName = "Pakr-Portable-$appName.exe"
 New-Item -ItemType Directory -Path 'windows-artifact' -Force | Out-Null
-Copy-Item -LiteralPath 'windows-publish/Pakr.Windows.exe' -Destination (Join-Path 'windows-artifact' $fileName)
+Copy-Item -LiteralPath (Join-Path $buildDirectory 'Release/Pakr.Windows.exe') -Destination (Join-Path 'windows-artifact' $fileName)
