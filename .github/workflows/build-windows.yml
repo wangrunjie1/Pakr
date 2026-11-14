@@ -1,0 +1,54 @@
+name: Build Windows EXE
+run-name: Pakr Windows ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        required: true
+        type: string
+      app_url:
+        required: true
+        type: string
+      app_name:
+        required: true
+        type: string
+      package_name:
+        required: true
+        type: string
+      version_name:
+        required: true
+        type: string
+      icon_url:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install icon processing dependency
+        run: python -m pip install Pillow
+      - name: Build Windows application and installer
+        shell: pwsh
+        env:
+          PAKR_APP_URL: ${{ inputs.app_url }}
+          PAKR_APP_NAME: ${{ inputs.app_name }}
+          PAKR_APP_ID: ${{ inputs.package_name }}
+          PAKR_VERSION: ${{ inputs.version_name }}
+          PAKR_ICON_URL: ${{ inputs.icon_url }}
+        run: ./Windows/Build-Installer.ps1
+      - name: Upload EXE installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-setup
+          path: windows-artifact/Pakr-Windows-x64-Setup.exe
+          if-no-files-found: error
+          compression-level: 0

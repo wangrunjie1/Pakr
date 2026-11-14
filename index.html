@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>html2.link · URL 转 APK</title>
+<title>Pakr · APK / Windows EXE 打包</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -433,6 +433,11 @@ footer{border-top-color:var(--border);color:var(--faint)}
 .dl-btn{background:var(--text)!important;color:var(--bg)!important;border-color:var(--text)!important}
 .cp-btn.copied{background:#ecfdf3!important;color:#15803d!important;border-color:#bbf7d0!important}
 @media (min-width: 520px){.apk-actions{grid-template-columns:repeat(3,1fr)}}
+.platform-picker{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:0;border-radius:10px;background:var(--surface);margin:0;min-width:0}
+.platform-picker button{min-height:36px;border:0;border-radius:7px;background:transparent;color:var(--text);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.platform-picker button[aria-pressed="true"]{background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.platform-picker button:disabled{cursor:default;opacity:.65}
+[hidden]{display:none!important}
 
 </style>
 </head>
@@ -467,6 +472,11 @@ footer{border-top-color:var(--border);color:var(--faint)}
         填写应用信息
       </div>
       <form class="form" id="form" novalidate>
+        <div class="platform-picker" role="group" aria-label="打包方式">
+          <button type="button" data-platform="android" aria-pressed="true">安卓 APK</button>
+          <button type="button" data-platform="windows" aria-pressed="false">Windows EXE</button>
+        </div>
+        <div id="windowsHint" class="toggle-hint" hidden>Windows 10/11 x64 联网安装包。需要 <a href="https://developer.microsoft.com/microsoft-edge/webview2/" target="_blank" rel="noopener noreferrer">WebView2 Runtime</a>，试用安装包可能提示未知发布者。</div>
         <div class="field">
           <label for="f_url">目标网址</label>
           <input type="url" id="f_url" placeholder="https://example.com" autocomplete="off" required>
@@ -476,7 +486,7 @@ footer{border-top-color:var(--border);color:var(--faint)}
           <input type="text" id="f_name" placeholder="我的应用" required>
         </div>
         <div class="field">
-          <label for="f_pkg">包名</label>
+          <label for="f_pkg" id="appIdLabel">包名</label>
           <input type="text" id="f_pkg" placeholder="com.example.myapp" required>
         </div>
         <div class="field">
@@ -494,7 +504,7 @@ footer{border-top-color:var(--border);color:var(--faint)}
             </div>
           </div>
 
-          <div class="toggle-field">
+          <div class="toggle-field" data-android-only>
             <label class="toggle-label" for="f_pull_refresh">
               <input type="checkbox" id="f_pull_refresh">
               <span>允许 App 内下拉刷新</span>
@@ -526,18 +536,18 @@ footer{border-top-color:var(--border);color:var(--faint)}
         </div>
         <div class="check-item" id="st2">
           <div class="check-ico"><svg viewBox="0 0 12 12"><path d="M2 6l3 3 5-5"/></svg></div>
-          注入参数 &amp; 处理图标
+          <span id="stepPrepare">注入参数 &amp; 处理图标</span>
         </div>
         <div class="check-item" id="st3">
           <div class="check-ico"><svg viewBox="0 0 12 12"><path d="M2 6l3 3 5-5"/></svg></div>
-          Gradle 编译 APK
+          <span id="stepCompile">Gradle 编译 APK</span>
         </div>
         <div class="check-item" id="st4">
           <div class="check-ico"><svg viewBox="0 0 12 12"><path d="M2 6l3 3 5-5"/></svg></div>
-          签名 &amp; 打包完成
+          <span id="stepFinish">签名 &amp; 打包完成</span>
         </div>
       </div>
-      <div class="err-msg" id="errBox"></div>
+      <div class="err-msg" id="errBox" role="alert"></div>
       <div id="iconFallbackTip" style="display:none;margin-top:10px;font-size:12px;color:#666">图标下载失败，已自动回退为 html2.link logo</div>
       <div id="dlActions"></div>
       </div>
@@ -550,7 +560,7 @@ footer{border-top-color:var(--border);color:var(--faint)}
 
 <footer>
   <p style="font-size:12px;color:var(--faint);text-align:center;padding:12px 16px;line-height:1.6;max-width:600px;margin:0 auto">
-    html2.link · URL 转 APK
+    html2.link · APK / Windows EXE 打包
   </p>
 </footer>
 
@@ -661,12 +671,29 @@ function clearErrDetails(){
 }
 
 let pollTimer = null;
-let logTimer = null;
 let busy = false;
 let buildStartTime = 0;
-let currentRunId = null;
+let platform = 'android';
+const platformButtons = document.querySelectorAll('.platform-picker button');
 
-function setBusy(v){ busy=v; submitBtn.disabled=v; }
+function setPlatform(next) {
+  platform = next === 'windows' ? 'windows' : 'android';
+  const windows = platform === 'windows';
+  platformButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.platform === platform)));
+  document.querySelectorAll('[data-android-only]').forEach(element => { element.hidden = windows; });
+  document.getElementById('windowsHint').hidden = !windows;
+  document.getElementById('appIdLabel').textContent = windows ? '应用标识' : '包名';
+}
+platformButtons.forEach(button => button.addEventListener('click', () => {
+  setPlatform(button.dataset.platform);
+  saveForm();
+}));
+
+function setBusy(v){
+  busy = v;
+  submitBtn.disabled = v;
+  platformButtons.forEach(button => { button.disabled = v; });
+}
 
 function setStep(n, state){
   const el = document.getElementById('st'+n);
@@ -711,13 +738,13 @@ function validate(){
 }
 
 async function handleBuildClick(){
-  const e = { preventDefault:()=>{} };
   if(busy) return;
   errBox.classList.remove('show');
   clearErrDetails();
   if(!validate()) return;
 
   const data = {
+    platform,
     app_url:      document.getElementById('f_url').value.trim(),
     app_name:     document.getElementById('f_name').value.trim(),
     package_name: document.getElementById('f_pkg').value.trim(),
@@ -727,6 +754,12 @@ async function handleBuildClick(){
   };
 
   setBusy(true);
+  const windows = data.platform === 'windows';
+  document.getElementById('stepPrepare').textContent = windows ? '准备应用配置' : '注入参数 & 处理图标';
+  document.getElementById('stepCompile').textContent = windows ? '编译 Windows 应用' : 'Gradle 编译 APK';
+  document.getElementById('stepFinish').textContent = windows ? '生成 EXE 安装包' : '签名 & 打包完成';
+  document.getElementById('dlActions').replaceChildren();
+  document.getElementById('iconFallbackTip').style.display = 'none';
   buildStartTime = Date.now();
   showStatus();
   setDot('running');
@@ -734,15 +767,14 @@ async function handleBuildClick(){
   setProgress(6);
   [1,2,3,4].forEach(n => setStep(n, ''));
 
+  const ctl = new AbortController();
+  const buildTimeout = setTimeout(() => ctl.abort(), 25000);
   try {
-    const ctl = new AbortController();
-    const buildTimeout = setTimeout(() => ctl.abort(), 25000);
     const res  = await fetch(WORKER + '/build', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(data),
       signal: ctl.signal,
     });
-    clearTimeout(buildTimeout);
     const json = await res.json();
     if(!res.ok) throw new Error(json.error || '触发失败');
 
@@ -758,21 +790,30 @@ async function handleBuildClick(){
         : err.message);
     showErr(msg);
   } finally {
-    setBusy(false);
+    clearTimeout(buildTimeout);
   }
 }
 
-function startPoll(runId, data, buildId=null, dispatchedAt=null){
+function startPoll(runId, input, buildId=null, dispatchedAt=null){
+  const windows = input.platform === 'windows';
   let elapsed = 0;
   const MAX_WAIT = 1800; // 最长等 30 分钟
-  currentRunId = runId;
+  let checking = false;
   pollTimer = setInterval(async ()=>{
     elapsed += 5;
+    if (checking) return;
+    if (elapsed >= MAX_WAIT) {
+      clearInterval(pollTimer);
+      if (runId) await tryFetchArtifacts(runId);
+      else showErr('等待构建任务超时，请稍后重试。');
+      return;
+    }
+    checking = true;
     try {
       const qs = runId ? ('run_id=' + encodeURIComponent(runId)) : ('build_id=' + encodeURIComponent(buildId) + (dispatchedAt ? '&dispatched_at=' + encodeURIComponent(dispatchedAt) : ''));
-      const r    = await fetch(WORKER + '/status?' + qs);
+      const r = await fetch(WORKER + '/status?' + qs + (windows ? '&platform=windows' : ''), { signal: AbortSignal.timeout(20000) });
       const data = await r.json();
-      if(!runId && data.run_id){ runId = data.run_id; currentRunId = runId; startLogPoll(runId); }
+      if(!runId && data.run_id) runId = data.run_id;
       const est  = Math.min(18 + Math.round(elapsed / 300 * 70), 88);
 
       if(data.status === 'queued' || data.status === 'waiting'){
@@ -791,7 +832,12 @@ function startPoll(runId, data, buildId=null, dispatchedAt=null){
         const step = data.current_step || '';
         const si = data.step_index||0, st = data.step_total||5;
         const stepLabel = st>0 ? ' · 步骤 ' + si + '/' + st : '';
-        if(step.includes('Inject') || pct < 20){
+        if (windows) {
+          const packaging = step.includes('Package') || step.includes('Upload') || pct >= 70;
+          setStep(2, 'done'); setStep(3, packaging ? 'done' : 'active');
+          if (packaging) setStep(4, 'active');
+          setTitle(packaging ? '打包中' : '编译中', (packaging ? '正在生成 Windows 安装包…' : '正在编译 Windows 应用…') + stepLabel);
+        } else if(step.includes('Inject') || pct < 20){
           setStep(2,'active'); setTitle('构建中','注入参数 & 处理图标…'+stepLabel);
         } else if(step.includes('Process') || pct < 35){
           setStep(2,'done'); setStep(3,'active'); setTitle('构建中','处理图标资源…'+stepLabel);
@@ -804,7 +850,7 @@ function startPoll(runId, data, buildId=null, dispatchedAt=null){
 
       if(data.status === 'completed'){
         clearInterval(pollTimer);
-                if(data.conclusion === 'success' || data.artifacts?.length || data.artifact_id){
+        if(data.artifacts?.length || data.artifact_id || (!windows && data.conclusion === 'success')){
           // 成功，或者虽然结论异常但 artifacts 存在，都给下载链接
           setStep(2,'done'); setStep(3,'done'); setStep(4,'done');
             setProgress(100); setDot('success');
@@ -814,7 +860,6 @@ function startPoll(runId, data, buildId=null, dispatchedAt=null){
           setTitle('打包完成 🎉', '耗时 ' + _timeStr);
           setBusy(false);
           renderDownloadButtons(data, runId);
-          addHistory(data);
         } else if(data.conclusion === 'failure'){
           setStep(4,'fail');
           const failStep = data.failed_step ? `步骤「${data.failed_step}」失败` : '构建失败';
@@ -837,25 +882,19 @@ function startPoll(runId, data, buildId=null, dispatchedAt=null){
           setBusy(false);
         } else {
           // cancelled / timed_out 等，尝试拿 artifacts
-          tryFetchArtifacts(runId, data);
+          await tryFetchArtifacts(runId);
         }
         return;
       }
 
-      // 超时保护：15 分钟后先查一次 artifacts
-      if(elapsed >= MAX_WAIT){
-        clearInterval(pollTimer);
-                showErr('GitHub Actions 长时间未启动，可能是运行器繁忙，请稍后重试');
-        tryFetchArtifacts(runId, data);
-      }
-
-    } catch(e){ /* 网络抖动忽略 */ }
+    } catch(e){ /* 下次轮询重试 */ }
+    finally { checking = false; }
   }, 5000);
 }
 
-async function tryFetchArtifacts(runId, data){
+async function tryFetchArtifacts(runId){
   try {
-    const r = await fetch(WORKER + '/status?run_id=' + runId);
+    const r = await fetch(WORKER + '/status?run_id=' + encodeURIComponent(runId), { signal: AbortSignal.timeout(20000) });
     const fresh = await r.json();
     if(fresh.artifacts?.length || fresh.artifact_id){
       setStep(2,'done'); setStep(3,'done'); setStep(4,'done');
@@ -866,7 +905,6 @@ async function tryFetchArtifacts(runId, data){
           setTitle('打包完成 🎉', '耗时 ' + _timeStr);
       setBusy(false);
       renderDownloadButtons(fresh, runId);
-      addHistory(fresh);
     } else {
       setDot('fail');
       setTitle('超时', '前端轮询超时，但构建可能已经完成');
@@ -960,7 +998,7 @@ function renderDownloadButtons(data, runId){
     // 下载
     const dlBtn=document.createElement('button');
     dlBtn.type='button'; dlBtn.className='dl-btn';
-    dlBtn.innerHTML=DL_ICO+' 下载 APK';
+    dlBtn.innerHTML=DL_ICO+(badge.startsWith('EXE') ? ' 下载 EXE' : ' 下载 APK');
     dlBtn.addEventListener('click',()=>{ window.location.href=dlUrl; });
 
     // 二维码
@@ -1023,8 +1061,9 @@ function renderDownloadButtons(data, runId){
     artifacts.forEach((art,i)=>{
       const is64 =art.name&&/arm64/i.test(art.name);
       const is32 =art.name&&/armeabi/i.test(art.name);
-      const label=is64?'64 位 APK':is32?'32 位 APK':'APK';
-      const badge=is64?'64 Bit':is32?'32 Bit':'APK';
+      const windows=art.name==='windows-x64-setup';
+      const label=windows?'Windows 安装包':is64?'64 位 APK':is32?'32 位 APK':'APK';
+      const badge=windows?'EXE · x64':is64?'64 Bit':is32?'32 Bit':'APK';
       const dlUrl=WORKER+'/download?run_id='+runId+'&artifact_id='+art.id;
       makeCard(dlUrl,label,badge,i===0);
     });
@@ -1034,7 +1073,7 @@ function renderDownloadButtons(data, runId){
 const SAVE_KEYS = ['f_url','f_name','f_pkg','f_ver','f_icon'];
 const CHECKBOX_KEYS = ['f_pull_refresh'];
 function saveForm(){
-  const saved = {};
+  const saved = { platform };
   SAVE_KEYS.forEach(id => { saved[id] = document.getElementById(id).value; });
   CHECKBOX_KEYS.forEach(id => { saved[id] = document.getElementById(id).checked; });
   localStorage.setItem('apkbuilder_form', JSON.stringify(saved));
@@ -1042,6 +1081,7 @@ function saveForm(){
 function loadForm(){
   try {
     const saved = JSON.parse(localStorage.getItem('apkbuilder_form') || '{}');
+    setPlatform(saved.platform);
     SAVE_KEYS.forEach(id => {
       if(saved[id]) document.getElementById(id).value = saved[id];
     });
@@ -1093,21 +1133,6 @@ window.addEventListener('pageshow', () => {
 });
 triggerIconPreview(iconInput.value.trim());
 
-
-function addHistory(data){
-  const item = {
-    run_id:       data.run_id || currentRunId,
-    app_name:     document.getElementById('f_name').value.trim(),
-    package_name: document.getElementById('f_pkg').value.trim(),
-    version_name: document.getElementById('f_ver').value.trim(),
-    icon_url:     document.getElementById('f_icon').value.trim(),
-    app_url:      document.getElementById('f_url').value.trim(),
-    artifacts:    data.artifacts || (data.artifact_id ? [{id:data.artifact_id,name:data.artifact_name||'APK'}] : []),
-    ts: Date.now(),
-    elapsed: buildStartTime ? Math.round((Date.now()-buildStartTime)/1000) : 0,
-  };
-  h.unshift(item);
-}
 
 /* ── Theme ── */
 function toggleTheme(){

@@ -39,7 +39,9 @@ function isSafeUrl(u) {
 }
 
 async function handleBuild(request, env) {
-  const { app_url, app_name, package_name, version_name, icon_url, pull_to_refresh } = await request.json();
+  const input = await request.json();
+  if (input?.platform === 'windows') return handleWindowsBuild(input, env);
+  const { app_url, app_name, package_name, version_name, icon_url, pull_to_refresh } = input;
   const buildId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   if (!app_url || !app_name || !package_name || !version_name)
     return json({ error: 'Missing required fields' }, 400);
@@ -80,19 +82,57 @@ async function handleBuild(request, env) {
   return json({ status: 'queued', build_id: buildId, dispatched_at: new Date().toISOString() });
 }
 
+const windowsWorkflow = 'build-windows.yml';
+
+async function handleWindowsBuild({ app_url, app_name, package_name, version_name, icon_url = '' }, env) {
+  if (typeof app_url !== 'string' || app_url.length > 2048 || !isSafeUrl(app_url)) {
+    return json({ error: '请输入有效的网页地址' }, 400);
+  }
+  const target = new URL(app_url);
+  if (target.protocol !== 'https:' || target.username || target.password) {
+    return json({ error: 'Windows 打包仅支持 HTTPS 网页地址' }, 400);
+  }
+  if (typeof app_name !== 'string' || !/^[\p{L}\p{M}\p{N} _.-]{1,60}$/u.test(app_name) || !app_name.trim()) {
+    return json({ error: '应用名称须为 1–60 个字，支持文字、数字、空格、下划线、连字符和点号' }, 400);
+  }
+  if (typeof package_name !== 'string' || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,}$/.test(package_name) || package_name.length > 100) {
+    return json({ error: '应用标识格式有误，例如 com.example.myapp' }, 400);
+  }
+  if (typeof version_name !== 'string' || !/^\d{1,5}(\.\d{1,5}){2}$/.test(version_name)
+      || version_name.split('.').some(part => Number(part) > 65535)) {
+    return json({ error: '版本号需为三段数字，例如 1.0.0，每段不超过 65535' }, 400);
+  }
+  if (icon_url !== '' && (typeof icon_url !== 'string' || icon_url.length > 2048 || !isSafeUrl(icon_url)
+      || new URL(icon_url).username || new URL(icon_url).password)) {
+    return json({ error: '请输入有效的图标 URL' }, 400);
+  }
+  const buildId = crypto.randomUUID();
+  const resp = await gh(env,
+    `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${windowsWorkflow}/dispatches`, {
+      method: 'POST',
+      body: JSON.stringify({ ref: 'main', inputs: { build_id: buildId, app_url: target.href, app_name: app_name.trim(), package_name, version_name, icon_url } }),
+    });
+  if (!resp.ok) return json({ error: `Windows 构建提交失败（GitHub ${resp.status}）` }, 502);
+  const runId = resp.status === 200 ? (await resp.json()).workflow_run_id : null;
+  return json({ status: 'queued', build_id: buildId, run_id: runId || null });
+}
+
 async function handleStatus(request, env) {
   const u = new URL(request.url);
   let runId = u.searchParams.get('run_id');
   const buildId = u.searchParams.get('build_id');
 
   if (!runId && buildId) {
+    const windows = u.searchParams.get('platform') === 'windows';
+    const workflow = windows ? windowsWorkflow : 'build.yml';
     const dispatchedAt = u.searchParams.get('dispatched_at');
     const runsRes = await gh(env,
-      `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/build.yml/runs?event=workflow_dispatch&per_page=20`
+      `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${workflow}/runs?event=workflow_dispatch&per_page=20`
     );
     const runs = await runsRes.json();
     const baseTs = dispatchedAt ? Date.parse(dispatchedAt) : Date.now();
     const matched = (runs.workflow_runs || []).find(r => {
+      if (windows) return r.display_title === `Pakr Windows ${buildId}`;
       const created = Date.parse(r.created_at || 0);
       return Number.isFinite(created) && created >= (baseTs - 15000);
     });
@@ -240,6 +280,7 @@ async function handleDownload(request, env) {
 
   const resolvedId = picked.id;
   const artifactName = picked.name || 'apk';
+  const isWindows = artifactName === 'windows-x64-setup';
 
   const dlRedirect = await gh(env,
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/artifacts/${resolvedId}/zip`,
@@ -252,6 +293,20 @@ async function handleDownload(request, env) {
 
   const dl = await fetch(s3Url);
   if (!dl.ok) return json({ error: 'Download failed from S3', status: dl.status, run_id: runId, artifact_id: resolvedId }, 502);
+  if (isWindows) {
+    try {
+      // Only accept the installer produced by the Windows workflow.
+      const exe = await extractWindowsSetup(dl);
+      return new Response(exe, { headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': 'attachment; filename="Pakr-Windows-x64-Setup.exe"',
+        'Content-Length': String(exe.byteLength),
+        'Cache-Control': 'no-store',
+      } });
+    } catch {
+      return json({ error: 'Windows 安装包无效，请重新打包' }, 502);
+    }
+  }
   const zipBuf = await dl.arrayBuffer();
 
   try {
@@ -276,6 +331,54 @@ async function handleDownload(request, env) {
       'Cache-Control': 'no-store',
     }
   });
+}
+
+async function extractWindowsSetup(response) {
+  const maxBytes = 24 * 1024 * 1024;
+  async function readLimited(stream) {
+    const reader = stream.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > maxBytes) throw new Error('Artifact too large');
+        chunks.push(value);
+      }
+    } finally { await reader.cancel(); }
+    return new Response(new Blob(chunks)).arrayBuffer();
+  }
+
+  const zip = await readLimited(response.body);
+  const view = new DataView(zip);
+  const end = zip.byteLength - 22;
+  if (end < 0 || view.getUint32(end, true) !== 0x06054b50 || view.getUint16(end + 10, true) !== 1) {
+    throw new Error('Unexpected artifact ZIP');
+  }
+  const entry = view.getUint32(end + 16, true);
+  if (entry + 46 > end || view.getUint32(entry, true) !== 0x02014b50) throw new Error('Invalid ZIP entry');
+  const bytes = new Uint8Array(zip);
+  const nameLength = view.getUint16(entry + 28, true);
+  const name = new TextDecoder().decode(bytes.subarray(entry + 46, entry + 46 + nameLength));
+  if (name !== 'Pakr-Windows-x64-Setup.exe') throw new Error('Unexpected artifact name');
+  const method = view.getUint16(entry + 10, true);
+  const compressedSize = view.getUint32(entry + 20, true);
+  const size = view.getUint32(entry + 24, true);
+  const local = view.getUint32(entry + 42, true);
+  if (size < 64 || size > maxBytes || local + 30 > entry || view.getUint32(local, true) !== 0x04034b50) {
+    throw new Error('Invalid installer size or header');
+  }
+  const offset = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+  if (offset + compressedSize > entry || ![0, 8].includes(method)) throw new Error('Invalid installer data');
+  const payload = zip.slice(offset, offset + compressedSize);
+  const exe = method === 0 ? payload : await readLimited(new Blob([payload]).stream().pipeThrough(new DecompressionStream('deflate-raw')));
+  const pe = new DataView(exe);
+  if (exe.byteLength !== size || pe.getUint16(0, true) !== 0x5a4d) throw new Error('Expected Windows executable');
+  const peOffset = pe.getUint32(60, true);
+  if (peOffset + 4 > size || pe.getUint32(peOffset, true) !== 0x00004550) throw new Error('Invalid PE header');
+  return exe;
 }
 
 // 解析 ZIP Local File Headers// 解析 ZIP Local File Headers，提取第一个 .apk 文件字节（支持 stored + deflate）
