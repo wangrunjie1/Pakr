@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using Microsoft.Web.WebView2.Core;
@@ -16,7 +17,9 @@ internal static class Program
 
         try
         {
-            var config = XElement.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app-config.xml"));
+            using var configStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Pakr.AppConfig.xml")
+                ?? throw new InvalidOperationException("Missing app configuration");
+            var config = XElement.Load(configStream);
             var url = new Uri((string)config.Element("Url"));
             var title = (string)config.Element("Name");
             var appId = (string)config.Element("Id");
@@ -67,7 +70,7 @@ internal static class Program
         }
         catch (Exception)
         {
-            MessageBox.Show("The app configuration could not be read. Reinstall the app and try again.", "Pakr Windows");
+            MessageBox.Show("The app configuration could not be read. Please download the app again.", "Pakr Windows");
         }
     }
 

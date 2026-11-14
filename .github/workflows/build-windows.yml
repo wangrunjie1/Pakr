@@ -34,9 +34,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
       - name: Install icon processing dependency
         run: python -m pip install Pillow
-      - name: Build Windows application and installer
+      - name: Build portable Windows application
         shell: pwsh
         env:
           PAKR_APP_URL: ${{ inputs.app_url }}
@@ -44,11 +47,10 @@ jobs:
           PAKR_APP_ID: ${{ inputs.package_name }}
           PAKR_VERSION: ${{ inputs.version_name }}
           PAKR_ICON_URL: ${{ inputs.icon_url }}
-        run: ./Windows/Build-Installer.ps1
-      - name: Upload EXE installer
-        uses: actions/upload-artifact@v4
+        run: ./Windows/Build-Portable.ps1
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v7
         with:
-          name: windows-x64-setup
-          path: windows-artifact/Pakr-Windows-x64-Setup.exe
+          path: windows-artifact/*.exe
           if-no-files-found: error
-          compression-level: 0
+          archive: false

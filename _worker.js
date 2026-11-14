@@ -281,6 +281,7 @@ async function handleDownload(request, env) {
   const resolvedId = picked.id;
   const artifactName = picked.name || 'apk';
   const isWindows = artifactName === 'windows-x64-setup';
+  const portable = /^Pakr-Portable-([\p{L}\p{M}\p{N} _.-]{1,60})\.exe$/u.exec(artifactName);
 
   const dlRedirect = await gh(env,
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/artifacts/${resolvedId}/zip`,
@@ -293,6 +294,30 @@ async function handleDownload(request, env) {
 
   const dl = await fetch(s3Url);
   if (!dl.ok) return json({ error: 'Download failed from S3', status: dl.status, run_id: runId, artifact_id: resolvedId }, 502);
+  if (portable) {
+    const reader = dl.body?.getReader();
+    const first = await reader?.read();
+    if (!first?.value || first.value[0] !== 0x4d || first.value[1] !== 0x5a) {
+      await reader?.cancel();
+      return json({ error: 'Windows EXE 无效，请重新打包' }, 502);
+    }
+    const stream = new ReadableStream({
+      start(controller) { controller.enqueue(first.value); },
+      async pull(controller) {
+        const { value, done } = await reader.read();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      },
+      cancel(reason) { return reader.cancel(reason); },
+    });
+    let name = portable[1].trim().replace(/[. ]+$/, '') || 'Pakr-Windows';
+    if (/^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\s*\.|$)/i.test(name)) name = `Pakr-${name}`;
+    return new Response(stream, { headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="Pakr-Windows.exe"; filename*=UTF-8''${encodeURIComponent(name + '.exe')}`,
+      'Cache-Control': 'no-store',
+    } });
+  }
   if (isWindows) {
     try {
       // Only accept the installer produced by the Windows workflow.

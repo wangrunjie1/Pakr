@@ -476,7 +476,7 @@ footer{border-top-color:var(--border);color:var(--faint)}
           <button type="button" data-platform="android" aria-pressed="true">安卓 APK</button>
           <button type="button" data-platform="windows" aria-pressed="false">Windows EXE</button>
         </div>
-        <div id="windowsHint" class="toggle-hint" hidden>Windows 10/11 x64 联网安装包。需要 <a href="https://developer.microsoft.com/microsoft-edge/webview2/" target="_blank" rel="noopener noreferrer">WebView2 Runtime</a>，试用安装包可能提示未知发布者。</div>
+        <div id="windowsHint" class="toggle-hint" hidden>Windows 10/11 x64 免安装版，下载后双击运行。需要 <a href="https://developer.microsoft.com/microsoft-edge/webview2/" target="_blank" rel="noopener noreferrer">WebView2 Runtime</a>，试用版可能提示未知发布者。</div>
         <div class="field">
           <label for="f_url">目标网址</label>
           <input type="url" id="f_url" placeholder="https://example.com" autocomplete="off" required>
@@ -757,7 +757,7 @@ async function handleBuildClick(){
   const windows = data.platform === 'windows';
   document.getElementById('stepPrepare').textContent = windows ? '准备应用配置' : '注入参数 & 处理图标';
   document.getElementById('stepCompile').textContent = windows ? '编译 Windows 应用' : 'Gradle 编译 APK';
-  document.getElementById('stepFinish').textContent = windows ? '生成 EXE 安装包' : '签名 & 打包完成';
+  document.getElementById('stepFinish').textContent = windows ? '生成免安装 EXE' : '签名 & 打包完成';
   document.getElementById('dlActions').replaceChildren();
   document.getElementById('iconFallbackTip').style.display = 'none';
   buildStartTime = Date.now();
@@ -836,7 +836,7 @@ function startPoll(runId, input, buildId=null, dispatchedAt=null){
           const packaging = step.includes('Package') || step.includes('Upload') || pct >= 70;
           setStep(2, 'done'); setStep(3, packaging ? 'done' : 'active');
           if (packaging) setStep(4, 'active');
-          setTitle(packaging ? '打包中' : '编译中', (packaging ? '正在生成 Windows 安装包…' : '正在编译 Windows 应用…') + stepLabel);
+          setTitle(packaging ? '打包中' : '编译中', (packaging ? '正在生成免安装 EXE…' : '正在编译 Windows 应用…') + stepLabel);
         } else if(step.includes('Inject') || pct < 20){
           setStep(2,'active'); setTitle('构建中','注入参数 & 处理图标…'+stepLabel);
         } else if(step.includes('Process') || pct < 35){
@@ -1061,8 +1061,9 @@ function renderDownloadButtons(data, runId){
     artifacts.forEach((art,i)=>{
       const is64 =art.name&&/arm64/i.test(art.name);
       const is32 =art.name&&/armeabi/i.test(art.name);
-      const windows=art.name==='windows-x64-setup';
-      const label=windows?'Windows 安装包':is64?'64 位 APK':is32?'32 位 APK':'APK';
+      const portable=art.name?.startsWith('Pakr-Portable-') && art.name.endsWith('.exe');
+      const windows=portable || art.name==='windows-x64-setup';
+      const label=portable?'免安装 EXE':windows?'Windows 安装包':is64?'64 位 APK':is32?'32 位 APK':'APK';
       const badge=windows?'EXE · x64':is64?'64 Bit':is32?'32 Bit':'APK';
       const dlUrl=WORKER+'/download?run_id='+runId+'&artifact_id='+art.id;
       makeCard(dlUrl,label,badge,i===0);

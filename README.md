@@ -36,11 +36,11 @@
 
 ## Windows EXE 试用
 
-在打包页选择 **Windows EXE**，填写 HTTPS 网址、应用名称、应用标识和三段数字版本号。构建成功后下载 `Pakr-Windows-x64-Setup.exe`。安装后通过开始菜单打开应用，同一应用标识用于后续覆盖安装。应用使用 WebView2 联网加载原网页。
+在打包页选择 **Windows EXE**，填写 HTTPS 网址、应用名称、应用标识和三段数字版本号。构建成功后可下载以应用名称命名的免安装 EXE，双击即可运行。应用使用 WebView2 联网加载原网页，同一应用标识继续使用对应的 WebView2 数据目录。
 
-Windows 工作流位于 `.github/workflows/build-windows.yml`，需要提交到 GitHub 仓库的默认分支。现有 Cloudflare Pages 使用同一仓库和 `GITHUB_TOKEN` 派发构建，沿用原有 Actions 权限。工作流用 GitHub 的 Windows runner 编译，使用 Inno Setup 生成每用户安装包。
+Windows 工作流位于 `.github/workflows/build-windows.yml`，需要提交到 GitHub 仓库的默认分支。现有 Cloudflare Pages 使用同一仓库和 `GITHUB_TOKEN` 派发构建，沿用原有 Actions 权限。工作流用 GitHub 的 Windows runner 编译，生成内含 .NET 运行时和应用配置的单文件 EXE。
 
-试用目标为 Windows 10 22H2 / Windows 11 x64，需安装 .NET Framework 4.8 和 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。可选填写公开的 PNG、JPG 或 ICO 图标 URL，构建时生成安装包、应用和快捷方式图标。留空或远程图片不可用时使用 html2.link 默认图标。安装包未做代码签名，首次打开可能提示未知发布者。
+试用目标为 Windows 10 22H2 / Windows 11 x64，需要 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。可选填写公开的 PNG、JPG 或 ICO 图标 URL，构建时设置 EXE 和窗口图标。留空或远程图片不可用时使用 html2.link 默认图标。免安装 EXE 未做代码签名，首次打开可能提示未知发布者。
 
 ## 架构说明
 

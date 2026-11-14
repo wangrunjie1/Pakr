@@ -18,22 +18,26 @@ if ($env:PAKR_VERSION -notmatch '\A[0-9]{1,5}(\.[0-9]{1,5}){2}\z' -or
     throw 'Invalid version'
 }
 
-$publishArgs = @('publish', 'Windows/Pakr.Windows.csproj', '-c', 'Release', '-o', 'windows-publish')
 $iconPath = Join-Path $env:RUNNER_TEMP 'Pakr.App.ico'
 & python Windows/Process-Icon.py $iconPath
 if ($LASTEXITCODE -ne 0) { throw 'Icon processing failed' }
-$publishArgs += "-p:ApplicationIcon=$iconPath"
-
-& dotnet @publishArgs
-if ($LASTEXITCODE -ne 0) { throw "Windows app compilation failed ($LASTEXITCODE)" }
 
 $config = [System.Xml.XmlDocument]::new()
 $app = $config.AppendChild($config.CreateElement('App'))
 $app.AppendChild($config.CreateElement('Url')).InnerText = $target.AbsoluteUri
 $app.AppendChild($config.CreateElement('Name')).InnerText = $env:PAKR_APP_NAME
 $app.AppendChild($config.CreateElement('Id')).InnerText = $env:PAKR_APP_ID
-$config.Save((Join-Path $PWD 'windows-publish/app-config.xml'))
+$configPath = Join-Path $env:RUNNER_TEMP 'Pakr.AppConfig.xml'
+$config.Save($configPath)
 
-$compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
-& $compiler "/DPakrAppName=$($env:PAKR_APP_NAME)" "/DPakrAppId=$($env:PAKR_APP_ID)" "/DPakrVersion=$($env:PAKR_VERSION)" "/DPakrIconFile=$iconPath" "$PSScriptRoot/Setup.iss"
-if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
+$publishArgs = @('publish', 'Windows/Pakr.Windows.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
+    '-o', 'windows-publish', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
+    '-p:IncludeAllContentForSelfExtract=true', '-p:EnableCompressionInSingleFile=true',
+    "-p:ApplicationIcon=$iconPath", "-p:PakrConfigFile=$configPath", "-p:Version=$($env:PAKR_VERSION)")
+& dotnet @publishArgs
+if ($LASTEXITCODE -ne 0) { throw "Windows app compilation failed ($LASTEXITCODE)" }
+
+# The artifact prefix distinguishes portable builds from historical installers.
+$fileName = "Pakr-Portable-$($env:PAKR_APP_NAME.Trim()).exe"
+New-Item -ItemType Directory -Path 'windows-artifact' -Force | Out-Null
+Copy-Item -LiteralPath 'windows-publish/Pakr.Windows.exe' -Destination (Join-Path 'windows-artifact' $fileName)
