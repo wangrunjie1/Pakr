@@ -27,10 +27,11 @@ $publishArgs += "-p:ApplicationIcon=$iconPath"
 & dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw "Windows app compilation failed ($LASTEXITCODE)" }
 
-$config = [System.Xml.Linq.XElement]::new('App')
-$config.SetElementValue('Url', $target.AbsoluteUri)
-$config.SetElementValue('Name', $env:PAKR_APP_NAME)
-$config.SetElementValue('Id', $env:PAKR_APP_ID)
+$config = [System.Xml.XmlDocument]::new()
+$app = $config.AppendChild($config.CreateElement('App'))
+$app.AppendChild($config.CreateElement('Url')).InnerText = $target.AbsoluteUri
+$app.AppendChild($config.CreateElement('Name')).InnerText = $env:PAKR_APP_NAME
+$app.AppendChild($config.CreateElement('Id')).InnerText = $env:PAKR_APP_ID
 $config.Save((Join-Path $PWD 'windows-publish/app-config.xml'))
 
 $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
