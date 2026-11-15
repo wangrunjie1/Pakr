@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <windowsx.h>
+#include <commctrl.h>
 #include <shlobj.h>
 #include <winhttp.h>
 #include <wrl.h>
@@ -109,7 +110,10 @@ public:
             for (int i = 0; i < 3; ++i) {
                 controls_[i] = CreateWindowExW(0, L"BUTTON", labels[i], WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                     0, 0, 0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(101 + i)), instance, nullptr);
-                if (!controls_[i]) { DestroyWindow(window_); return 1; }
+                if (!controls_[i] || !SetWindowSubclass(controls_[i], CaptionButtonProc, 1, reinterpret_cast<DWORD_PTR>(this))) {
+                    DestroyWindow(window_);
+                    return 1;
+                }
             }
             Resize();
         }
@@ -126,6 +130,26 @@ public:
     }
 
 private:
+    static LRESULT CALLBACK CaptionButtonProc(HWND button, UINT message, WPARAM wParam, LPARAM lParam,
+            UINT_PTR subclassId, DWORD_PTR data) {
+        auto* app = reinterpret_cast<BrowserWindow*>(data);
+        if (message == WM_MOUSEMOVE && app->hoveredControl_ != button) {
+            TRACKMOUSEEVENT tracking{ sizeof(tracking), TME_LEAVE, button, 0 };
+            if (TrackMouseEvent(&tracking)) {
+                const HWND previous = app->hoveredControl_;
+                app->hoveredControl_ = button;
+                if (previous) InvalidateRect(previous, nullptr, FALSE);
+                InvalidateRect(button, nullptr, FALSE);
+            }
+        }
+        if ((message == WM_MOUSELEAVE || message == WM_NCDESTROY) && app->hoveredControl_ == button) {
+            app->hoveredControl_ = nullptr;
+            if (message == WM_MOUSELEAVE) InvalidateRect(button, nullptr, FALSE);
+        }
+        if (message == WM_NCDESTROY) RemoveWindowSubclass(button, CaptionButtonProc, subclassId);
+        return DefSubclassProc(button, message, wParam, lParam);
+    }
+
     std::wstring PlacementKey() const { return L"Software\\Pakr\\WindowPlacement\\" + config_.id; }
 
     void LoadBounds() {
@@ -245,11 +269,14 @@ private:
         title.left += Scale(14);
         title.right -= 3 * Scale(kCaptionButtonWidth) + CaptionInset() + Scale(8);
         if (title.right > title.left) {
-            const auto oldFont = SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
+            const auto font = CreateFontW(-Scale(13), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+            const auto oldFont = SelectObject(dc, font ? reinterpret_cast<HGDIOBJ>(font) : GetStockObject(DEFAULT_GUI_FONT));
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, highContrast ? GetSysColor(COLOR_WINDOWTEXT) : kCaptionText);
             DrawTextW(dc, config_.title.c_str(), -1, &title, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
             SelectObject(dc, oldFont);
+            if (font) DeleteObject(font);
         }
         EndPaint(window_, &paint);
     }
@@ -258,9 +285,11 @@ private:
         const RECT& rect = item.rcItem;
         const bool highContrast = UseHighContrast();
         const bool pressed = (item.itemState & ODS_SELECTED) != 0;
+        const bool highlighted = pressed || item.hwndItem == hoveredControl_;
         const bool close = item.CtlID == 103;
-        const COLORREF background = highContrast ? GetSysColor(pressed ? COLOR_HIGHLIGHT : COLOR_WINDOW)
-            : pressed ? (close ? RGB(180, 35, 45) : RGB(225, 229, 233)) : kCaptionBackground;
+        const COLORREF background = highContrast ? GetSysColor(highlighted ? COLOR_HIGHLIGHT : COLOR_WINDOW)
+            : close && highlighted ? (pressed ? RGB(179, 24, 39) : RGB(199, 29, 47))
+            : pressed ? RGB(218, 223, 228) : highlighted ? RGB(230, 233, 237) : kCaptionBackground;
         const auto brush = CreateSolidBrush(background);
         FillRect(item.hDC, &rect, brush);
         DeleteObject(brush);
@@ -269,8 +298,8 @@ private:
         const int y = (rect.top + rect.bottom) / 2;
         const int radius = Scale(5);
         const auto pen = CreatePen(PS_SOLID, Scale(1),
-            highContrast ? GetSysColor(pressed ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)
-                : close && pressed ? RGB(255, 255, 255) : kCaptionText);
+            highContrast ? GetSysColor(highlighted ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)
+                : close && highlighted ? RGB(255, 255, 255) : kCaptionText);
         const auto oldPen = SelectObject(item.hDC, pen);
         const auto line = [&](int x1, int y1, int x2, int y2) {
             MoveToEx(item.hDC, x1, y1, nullptr);
@@ -300,6 +329,7 @@ private:
         RECT bounds{};
         if (!GetClientRect(window_, &bounds)) return;
         if (config_.frameless) {
+            UpdateWindowCorners();
             const int buttonWidth = Scale(kCaptionButtonWidth);
             const int inset = CaptionInset();
             for (int i = 0; i < 3; ++i) {
@@ -312,6 +342,25 @@ private:
             InvalidateRect(window_, &caption, FALSE);
         }
         if (controller_) controller_->put_Bounds(bounds);
+    }
+
+    void UpdateWindowCorners() {
+        const bool square = IsZoomed(window_);
+        RECT rect{};
+        if (IsIconic(window_) || !GetWindowRect(window_, &rect)) return;
+        const LONG width = rect.right - rect.left;
+        const LONG height = rect.bottom - rect.top;
+        const int diameter = square ? 0 : Scale(16);
+        if (width <= 0 || height <= 0 || (width == cornerWidth_ && height == cornerHeight_ && diameter == cornerDiameter_)) return;
+        cornerWidth_ = width;
+        cornerHeight_ = height;
+        cornerDiameter_ = diameter;
+        if (square) {
+            SetWindowRgn(window_, nullptr, TRUE);
+        } else {
+            const auto region = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
+            if (region && !SetWindowRgn(window_, region, TRUE)) DeleteObject(region);
+        }
     }
 
     void Fail(PCWSTR message) {
@@ -403,6 +452,9 @@ private:
     const AppConfig& config_;
     HWND window_ = nullptr;
     HWND controls_[3]{};
+    HWND hoveredControl_ = nullptr;
+    LONG cornerWidth_ = 0, cornerHeight_ = 0;
+    int cornerDiameter_ = -1;
     RECT normalBounds_{};
     int exitCode_ = 0;
     std::wstring profile_;

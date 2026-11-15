@@ -10,4 +10,4 @@ target_compile_definitions(Pakr.Windows PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_
 target_include_directories(Pakr.Windows PRIVATE "${webview2_native}/include")
 target_link_libraries(Pakr.Windows PRIVATE
     "${webview2_native}/x64/WebView2LoaderStatic.lib"
-    advapi32 gdi32 ole32 oleaut32 shell32 shlwapi version winhttp runtimeobject uuid)
+    advapi32 comctl32 gdi32 ole32 oleaut32 shell32 shlwapi version winhttp runtimeobject uuid)
