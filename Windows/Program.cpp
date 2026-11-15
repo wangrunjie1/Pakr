@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <windowsx.h>
+#include <commctrl.h>
 #include <shlobj.h>
 #include <winhttp.h>
 #include <wrl.h>
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <cwchar>
+#include <iterator>
 #include <sstream>
 #include <string>
 
@@ -15,9 +17,10 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-constexpr int kControlBarHeight = 30;
+constexpr int kCaptionButtonHeight = 32;
 constexpr int kCaptionButtonWidth = 38;
 constexpr int kResizeGrip = 4;
+constexpr UINT_PTR kCaptionTimer = 1;
 
 struct AppConfig {
     std::wstring url;
@@ -98,15 +101,20 @@ public:
                 normalBounds_.left, normalBounds_.top, normalBounds_.right - normalBounds_.left,
                 normalBounds_.bottom - normalBounds_.top, nullptr, nullptr, instance, this)) return 1;
         if (config_.frameless) {
-            const PCWSTR labels[] = { L"最小化", L"最大化", L"关闭" };
-            for (int i = 0; i < 3; ++i) {
+            const PCWSTR labels[] = { L"最小化", L"最大化", L"关闭", L"移动窗口" };
+            for (int i = 0; i < 4; ++i) {
                 controls_[i] = CreateWindowExW(0, L"BUTTON", labels[i], WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                     0, 0, 0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(101 + i)), instance, nullptr);
                 if (!controls_[i]) { DestroyWindow(window_); return 1; }
             }
+            if (!SetWindowSubclass(controls_[3], DragButtonProc, 1, 0)) { DestroyWindow(window_); return 1; }
             Resize();
         }
         ShowWindow(window_, config_.maximized ? SW_SHOWMAXIMIZED : show);
+        if (config_.frameless) {
+            captionIntroUntil_ = GetTickCount64() + 2500;
+            SetTimer(window_, kCaptionTimer, 50, nullptr);
+        }
         StartBrowser();
 
         MSG message{};
@@ -119,6 +127,17 @@ public:
     }
 
 private:
+    static LRESULT CALLBACK DragButtonProc(HWND button, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+        if (message == WM_LBUTTONDOWN) {
+            POINT point{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            ClientToScreen(button, &point);
+            SendMessageW(GetParent(button), WM_NCLBUTTONDOWN, HTCAPTION, MAKELPARAM(point.x, point.y));
+            return 0;
+        }
+        if (message == WM_NCDESTROY) RemoveWindowSubclass(button, DragButtonProc, 1);
+        return DefSubclassProc(button, message, wParam, lParam);
+    }
+
     std::wstring PlacementKey() const { return L"Software\\Pakr\\WindowPlacement\\" + config_.id; }
 
     void LoadBounds() {
@@ -179,19 +198,26 @@ private:
                     if (point.y >= client.bottom - grip) return left ? HTBOTTOMLEFT : right ? HTBOTTOMRIGHT : HTBOTTOM;
                     if (left || right) return left ? HTLEFT : HTRIGHT;
                 }
-                if (point.y < app->Scale(kControlBarHeight)
-                    && point.x < client.right - app->CaptionInset() - 3 * app->Scale(kCaptionButtonWidth)) return HTCAPTION;
                 return HTCLIENT;
             }
-            if (message == WM_DRAWITEM && wParam >= 101 && wParam <= 103) {
+            if (message == WM_TIMER && wParam == kCaptionTimer) {
+                app->UpdateCaptionVisibility();
+                return 0;
+            }
+            if (message == WM_DRAWITEM && wParam >= 101 && wParam <= 104) {
                 app->DrawCaptionButton(*reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
                 return TRUE;
             }
             if (message == WM_COMMAND && lParam && HIWORD(wParam) == BN_CLICKED) {
                 switch (LOWORD(wParam)) {
-                    case 101: ShowWindow(window, SW_MINIMIZE); return 0;
-                    case 102: ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE); return 0;
+                    case 101: SetFocus(window); ShowWindow(window, SW_MINIMIZE); return 0;
+                    case 102: SetFocus(window); ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE); return 0;
                     case 103: SendMessageW(window, WM_CLOSE, 0, 0); return 0;
+                    case 104:
+                        SetFocus(window);
+                        if (IsZoomed(window)) ShowWindow(window, SW_RESTORE);
+                        SendMessageW(window, WM_SYSCOMMAND, SC_MOVE, 0);
+                        return 0;
                 }
             }
         }
@@ -201,6 +227,7 @@ private:
         }
         if (app && message == WM_CLOSE) app->SaveBounds();
         if (app && message == WM_DESTROY) {
+            if (app->config_.frameless) KillTimer(window, kCaptionTimer);
             app->window_ = nullptr;
             if (app->controller_) app->controller_->Close();
             app->controller_.Reset();
@@ -218,7 +245,28 @@ private:
         return MulDiv(value, dpi ? dpi : 96, 96);
     }
 
-    int CaptionInset() const { return IsZoomed(window_) ? 0 : Scale(kResizeGrip); }
+    void UpdateCaptionVisibility() {
+        POINT cursor{};
+        RECT client{};
+        GetClientRect(window_, &client);
+        bool overCorner = false;
+        if (GetCursorPos(&cursor)) {
+            const HWND hovered = WindowFromPoint(cursor);
+            if (hovered == window_ || IsChild(window_, hovered)) {
+                ScreenToClient(window_, &cursor);
+                overCorner = cursor.x >= client.right - Scale(168) && cursor.x < client.right
+                    && cursor.y >= 0 && cursor.y < Scale(48);
+            }
+        }
+        const bool focused = std::find(std::begin(controls_), std::end(controls_), GetFocus()) != std::end(controls_);
+        const bool visible = !IsIconic(window_) && (overCorner || focused || GetTickCount64() < captionIntroUntil_);
+        if (visible == captionVisible_) return;
+        captionVisible_ = visible;
+        for (HWND control : controls_) {
+            if (visible) SetWindowPos(control, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            else ShowWindow(control, SW_HIDE);
+        }
+    }
 
     void DrawCaptionButton(const DRAWITEMSTRUCT& item) const {
         const RECT& rect = item.rcItem;
@@ -230,7 +278,7 @@ private:
         const bool pressed = (item.itemState & ODS_SELECTED) != 0;
         const bool close = item.CtlID == 103;
         const COLORREF background = highContrast ? GetSysColor(pressed ? COLOR_HIGHLIGHT : COLOR_WINDOW)
-            : pressed ? (close ? RGB(175, 30, 40) : RGB(55, 55, 55)) : RGB(0, 0, 0);
+            : pressed ? (close ? RGB(175, 30, 40) : RGB(55, 55, 55)) : RGB(29, 31, 35);
         const auto brush = CreateSolidBrush(background);
         FillRect(item.hDC, &rect, brush);
         DeleteObject(brush);
@@ -250,6 +298,10 @@ private:
             line(x + radius, y - radius, x - radius, y + radius);
         } else if (item.CtlID == 101) {
             line(x - radius, y, x + radius + 1, y);
+        } else if (item.CtlID == 104) {
+            for (int row = -1; row <= 1; ++row) {
+                line(x - radius, y + row * Scale(3), x + radius + 1, y + row * Scale(3));
+            }
         } else {
             const auto oldBrush = SelectObject(item.hDC, GetStockObject(HOLLOW_BRUSH));
             const int offset = IsZoomed(window_) ? Scale(2) : 0;
@@ -270,19 +322,21 @@ private:
         if (!GetClientRect(window_, &bounds)) return;
         if (config_.frameless) {
             const int buttonWidth = Scale(kCaptionButtonWidth);
-            const int inset = CaptionInset();
-            for (int i = 0; i < 3; ++i) {
-                if (controls_[i]) MoveWindow(controls_[i], bounds.right - inset - (3 - i) * buttonWidth,
-                    inset, buttonWidth, Scale(kControlBarHeight) - inset, TRUE);
+            const int inset = Scale(8);
+            for (int i = 0; i < 4; ++i) {
+                if (!controls_[i]) continue;
+                const int height = Scale(kCaptionButtonHeight);
+                const int position = i == 3 ? 4 : 3 - i;
+                MoveWindow(controls_[i], bounds.right - inset - position * buttonWidth, inset, buttonWidth, height, TRUE);
+                const auto region = CreateRoundRectRgn(0, 0, buttonWidth + 1, height + 1, Scale(8), Scale(8));
+                if (region && !SetWindowRgn(controls_[i], region, TRUE)) DeleteObject(region);
             }
             if (controls_[1]) SetWindowTextW(controls_[1], IsZoomed(window_) ? L"还原" : L"最大化");
-            // Keep the WebView off the title strip and the resize hit areas.
-            bounds.left = inset;
-            bounds.right = std::max<LONG>(inset, bounds.right - inset);
-            bounds.bottom = std::max<LONG>(0, bounds.bottom - inset);
-            bounds.top = std::min<LONG>(bounds.bottom, Scale(kControlBarHeight));
         }
         if (controller_) controller_->put_Bounds(bounds);
+        if (config_.frameless && captionVisible_) {
+            for (HWND control : controls_) if (control) SetWindowPos(control, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
     }
 
     void Fail(PCWSTR message) {
@@ -373,7 +427,9 @@ private:
 
     const AppConfig& config_;
     HWND window_ = nullptr;
-    HWND controls_[3]{};
+    HWND controls_[4]{};
+    bool captionVisible_ = true;
+    ULONGLONG captionIntroUntil_ = 0;
     RECT normalBounds_{};
     int exitCode_ = 0;
     std::wstring profile_;
