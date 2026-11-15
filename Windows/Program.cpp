@@ -1,9 +1,11 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <shlobj.h>
 #include <winhttp.h>
 #include <wrl.h>
 #include <WebView2.h>
 
+#include <algorithm>
 #include <cwchar>
 #include <sstream>
 #include <string>
@@ -17,6 +19,10 @@ struct AppConfig {
     std::wstring url;
     std::wstring title;
     std::wstring id;
+    int width = 1100;
+    int height = 760;
+    bool maximized = false;
+    bool frameless = false;
 };
 
 bool ReadConfig(HINSTANCE instance, AppConfig& config) {
@@ -26,8 +32,18 @@ bool ReadConfig(HINSTANCE instance, AppConfig& config) {
     const auto data = static_cast<const wchar_t*>(LockResource(LoadResource(instance, resource)));
     if (!data || size == 0 || size % sizeof(wchar_t) != 0) return false;
     std::wistringstream input(std::wstring(data, size / sizeof(wchar_t)));
-    return std::getline(input, config.url) && std::getline(input, config.title) && std::getline(input, config.id)
-        && !config.url.empty() && !config.title.empty() && !config.id.empty();
+    if (!std::getline(input, config.url) || !std::getline(input, config.title) || !std::getline(input, config.id)
+        || config.url.empty() || config.title.empty() || config.id.empty()) return false;
+    std::wstring options;
+    if (!std::getline(input, options)) return true;
+    int maximized = 0, frameless = 0;
+    wchar_t trailing = 0;
+    if (swscanf_s(options.c_str(), L"%d,%d,%d,%d%c", &config.width, &config.height, &maximized, &frameless, &trailing, 1u) != 4
+        || config.width < 360 || config.width > 3840 || config.height < 280 || config.height > 2160
+        || (maximized != 0 && maximized != 1) || (frameless != 0 && frameless != 1)) return false;
+    config.maximized = maximized != 0;
+    config.frameless = frameless != 0;
+    return true;
 }
 
 bool IsHttps(PCWSTR url) {
@@ -37,6 +53,14 @@ bool IsHttps(PCWSTR url) {
     parts.dwHostNameLength = parts.dwUserNameLength = parts.dwPasswordLength = DWORD(-1);
     return WinHttpCrackUrl(url, 0, 0, &parts) && parts.nScheme == INTERNET_SCHEME_HTTPS
         && parts.dwHostNameLength != 0 && parts.dwUserNameLength == 0 && parts.dwPasswordLength == 0;
+}
+
+RECT FitWindow(RECT requested, const RECT& work) {
+    const LONG width = std::min(requested.right - requested.left, work.right - work.left);
+    const LONG height = std::min(requested.bottom - requested.top, work.bottom - work.top);
+    const LONG left = std::clamp(requested.left, work.left, work.right - width);
+    const LONG top = std::clamp(requested.top, work.top, work.bottom - height);
+    return { left, top, left + width, top + height };
 }
 
 class BrowserWindow {
@@ -53,9 +77,31 @@ public:
         windowClass.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
         if (!RegisterClassW(&windowClass)) return 1;
 
+        RECT work{};
+        if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0)) {
+            work.right = GetSystemMetrics(SM_CXSCREEN);
+            work.bottom = GetSystemMetrics(SM_CYSCREEN);
+        }
+        const int width = std::min(config_.width, static_cast<int>(work.right - work.left));
+        const int height = std::min(config_.height, static_cast<int>(work.bottom - work.top));
+        const LONG left = work.left + (work.right - work.left - width) / 2;
+        const LONG top = work.top + (work.bottom - work.top - height) / 2;
+        normalBounds_ = { left, top, left + width, top + height };
+        LoadBounds();
         if (!CreateWindowExW(0, windowClass.lpszClassName, config_.title.c_str(), WS_OVERLAPPEDWINDOW,
-                CW_USEDEFAULT, CW_USEDEFAULT, 1100, 760, nullptr, nullptr, instance, this)) return 1;
-        ShowWindow(window_, show);
+                normalBounds_.left, normalBounds_.top, normalBounds_.right - normalBounds_.left,
+                normalBounds_.bottom - normalBounds_.top, nullptr, nullptr, instance, this)) return 1;
+        if (config_.frameless) {
+            const PCWSTR labels[] = { L"最小化", L"最大化", L"关闭" };
+            for (int i = 0; i < 3; ++i) {
+                controls_[i] = CreateWindowExW(0, L"BUTTON", labels[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    0, 0, 0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(101 + i)), instance, nullptr);
+                if (!controls_[i]) { DestroyWindow(window_); return 1; }
+                SendMessageW(controls_[i], WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+            }
+            Resize();
+        }
+        ShowWindow(window_, config_.maximized ? SW_SHOWMAXIMIZED : show);
         StartBrowser();
 
         MSG message{};
@@ -68,6 +114,31 @@ public:
     }
 
 private:
+    std::wstring PlacementKey() const { return L"Software\\Pakr\\WindowPlacement\\" + config_.id; }
+
+    void LoadBounds() {
+        RECT saved{};
+        DWORD length = sizeof(saved);
+        if (RegGetValueW(HKEY_CURRENT_USER, PlacementKey().c_str(), L"Bounds", RRF_RT_REG_BINARY,
+                nullptr, &saved, &length) != ERROR_SUCCESS || length != sizeof(saved)) return;
+        // Ignore corrupt values before subtracting coordinates.
+        if (saved.left < -1000000 || saved.top < -1000000 || saved.right > 1000000 || saved.bottom > 1000000
+            || saved.right <= saved.left || saved.bottom <= saved.top) return;
+        MONITORINFO monitor{ sizeof(monitor) };
+        if (GetMonitorInfoW(MonitorFromRect(&saved, MONITOR_DEFAULTTONEAREST), &monitor)) {
+            normalBounds_ = FitWindow(saved, monitor.rcWork);
+        }
+    }
+
+    void SaveBounds() const {
+        HKEY key = nullptr;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, PlacementKey().c_str(), 0, nullptr, 0,
+                KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) return;
+        RegSetValueExW(key, L"Bounds", 0, REG_BINARY,
+            reinterpret_cast<const BYTE*>(&normalBounds_), sizeof(normalBounds_));
+        RegCloseKey(key);
+    }
+
     static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_NCCREATE) {
             auto* app = static_cast<BrowserWindow*>(reinterpret_cast<CREATESTRUCTW*>(lParam)->lpCreateParams);
@@ -75,7 +146,50 @@ private:
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(app));
         }
         auto* app = reinterpret_cast<BrowserWindow*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (app && app->config_.frameless) {
+            if (message == WM_GETMINMAXINFO) {
+                auto* limits = reinterpret_cast<MINMAXINFO*>(lParam);
+                limits->ptMinTrackSize.x = app->Scale(240);
+                limits->ptMinTrackSize.y = app->Scale(160);
+                return 0;
+            }
+            if (message == WM_NCCALCSIZE) {
+                if (wParam && IsZoomed(window)) {
+                    MONITORINFO monitor{ sizeof(monitor) };
+                    if (GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor)) {
+                        reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam)->rgrc[0] = monitor.rcWork;
+                    }
+                }
+                return 0;
+            }
+            if (message == WM_NCHITTEST) {
+                POINT point{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+                ScreenToClient(window, &point);
+                RECT client{};
+                GetClientRect(window, &client);
+                const int grip = app->Scale(6);
+                if (!IsZoomed(window)) {
+                    const bool left = point.x < grip, right = point.x >= client.right - grip;
+                    if (point.y < grip) return left ? HTTOPLEFT : right ? HTTOPRIGHT : HTTOP;
+                    if (point.y >= client.bottom - grip) return left ? HTBOTTOMLEFT : right ? HTBOTTOMRIGHT : HTBOTTOM;
+                    if (left || right) return left ? HTLEFT : HTRIGHT;
+                }
+                if (point.y < app->Scale(36) && point.x < client.right - app->Scale(6) - 3 * app->Scale(58)) return HTCAPTION;
+                return HTCLIENT;
+            }
+            if (message == WM_COMMAND && lParam && HIWORD(wParam) == BN_CLICKED) {
+                switch (LOWORD(wParam)) {
+                    case 101: ShowWindow(window, SW_MINIMIZE); return 0;
+                    case 102: ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE); return 0;
+                    case 103: SendMessageW(window, WM_CLOSE, 0, 0); return 0;
+                }
+            }
+        }
         if (app && message == WM_SIZE) app->Resize();
+        if (app && message == WM_WINDOWPOSCHANGED && IsWindowVisible(window) && !IsIconic(window) && !IsZoomed(window)) {
+            GetWindowRect(window, &app->normalBounds_);
+        }
+        if (app && message == WM_CLOSE) app->SaveBounds();
         if (app && message == WM_DESTROY) {
             app->window_ = nullptr;
             if (app->controller_) app->controller_->Close();
@@ -89,10 +203,29 @@ private:
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
+    int Scale(int value) const {
+        const UINT dpi = GetDpiForWindow(window_);
+        return MulDiv(value, dpi ? dpi : 96, 96);
+    }
+
     void Resize() {
-        if (!controller_) return;
         RECT bounds{};
-        if (GetClientRect(window_, &bounds)) controller_->put_Bounds(bounds);
+        if (!GetClientRect(window_, &bounds)) return;
+        if (config_.frameless) {
+            const int buttonWidth = Scale(58);
+            for (int i = 0; i < 3; ++i) {
+                if (controls_[i]) MoveWindow(controls_[i], bounds.right - Scale(6) - (3 - i) * buttonWidth,
+                    Scale(6), buttonWidth, Scale(27), TRUE);
+            }
+            if (controls_[1]) SetWindowTextW(controls_[1], IsZoomed(window_) ? L"还原" : L"最大化");
+            // Keep the WebView off the title strip and the resize hit areas.
+            const int inset = IsZoomed(window_) ? 0 : Scale(6);
+            bounds.left = inset;
+            bounds.right = std::max<LONG>(inset, bounds.right - inset);
+            bounds.bottom = std::max<LONG>(0, bounds.bottom - inset);
+            bounds.top = std::min<LONG>(bounds.bottom, Scale(36));
+        }
+        if (controller_) controller_->put_Bounds(bounds);
     }
 
     void Fail(PCWSTR message) {
@@ -183,6 +316,8 @@ private:
 
     const AppConfig& config_;
     HWND window_ = nullptr;
+    HWND controls_[3]{};
+    RECT normalBounds_{};
     int exitCode_ = 0;
     std::wstring profile_;
     ComPtr<ICoreWebView2Controller> controller_;

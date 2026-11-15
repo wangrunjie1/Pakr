@@ -24,7 +24,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Icon processing failed' }
 
 $configPath = Join-Path $env:RUNNER_TEMP 'Pakr.AppConfig.bin'
 $appName = $env:PAKR_APP_NAME.Trim()
-$config = @($target.AbsoluteUri, $appName, $env:PAKR_APP_ID) -join "`n"
+$windowOptions = if ($env:PAKR_WINDOW_OPTIONS) { $env:PAKR_WINDOW_OPTIONS } else { '1100,760,0,0' }
+if ($windowOptions -notmatch '\A([0-9]{3,4}),([0-9]{3,4}),[01],[01]\z' -or
+    [int]$Matches[1] -lt 360 -or [int]$Matches[1] -gt 3840 -or [int]$Matches[2] -lt 280 -or [int]$Matches[2] -gt 2160) {
+    throw 'Invalid Windows window options'
+}
+$config = @($target.AbsoluteUri, $appName, $env:PAKR_APP_ID, $windowOptions) -join "`n"
 [IO.File]::WriteAllBytes($configPath, [Text.Encoding]::Unicode.GetBytes($config))
 
 $version = ($env:PAKR_VERSION.Split('.') | ForEach-Object { [int]$_ }) -join ','

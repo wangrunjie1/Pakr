@@ -22,6 +22,9 @@ on:
       icon_url:
         required: false
         type: string
+      window_options:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -44,6 +47,7 @@ jobs:
           PAKR_APP_ID: ${{ inputs.package_name }}
           PAKR_VERSION: ${{ inputs.version_name }}
           PAKR_ICON_URL: ${{ inputs.icon_url }}
+          PAKR_WINDOW_OPTIONS: ${{ inputs.window_options }}
         run: ./Windows/Build-Portable.ps1
       - name: Upload portable EXE
         uses: actions/upload-artifact@v7

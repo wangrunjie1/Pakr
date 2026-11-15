@@ -84,7 +84,13 @@ async function handleBuild(request, env) {
 
 const windowsWorkflow = 'build-windows.yml';
 
-async function handleWindowsBuild({ app_url, app_name, package_name, version_name, icon_url = '' }, env) {
+async function handleWindowsBuild({ app_url, app_name, package_name, version_name, icon_url = '', window_options = '' }, env) {
+  if (window_options !== '') {
+    const match = typeof window_options === 'string' && /^([0-9]{3,4}),([0-9]{3,4}),[01],[01]$/.exec(window_options);
+    if (!match || Number(match[1]) < 360 || Number(match[1]) > 3840 || Number(match[2]) < 280 || Number(match[2]) > 2160) {
+      return json({ error: '窗口设置无效' }, 400);
+    }
+  }
   if (typeof app_url !== 'string' || app_url.length > 2048 || !isSafeUrl(app_url)) {
     return json({ error: '请输入有效的网页地址' }, 400);
   }
@@ -110,7 +116,9 @@ async function handleWindowsBuild({ app_url, app_name, package_name, version_nam
   const resp = await gh(env,
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${windowsWorkflow}/dispatches`, {
       method: 'POST',
-      body: JSON.stringify({ ref: 'main', inputs: { build_id: buildId, app_url: target.href, app_name: app_name.trim(), package_name, version_name, icon_url } }),
+      body: JSON.stringify({ ref: 'main', inputs: { build_id: buildId, app_url: target.href, app_name: app_name.trim(), package_name, version_name, icon_url,
+        ...(window_options && { window_options }),
+      } }),
     });
   if (!resp.ok) return json({ error: `Windows 构建提交失败（GitHub ${resp.status}）` }, 502);
   const runId = resp.status === 200 ? (await resp.json()).workflow_run_id : null;
