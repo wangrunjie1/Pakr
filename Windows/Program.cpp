@@ -15,6 +15,10 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
+constexpr int kControlBarHeight = 30;
+constexpr int kCaptionButtonWidth = 38;
+constexpr int kResizeGrip = 4;
+
 struct AppConfig {
     std::wstring url;
     std::wstring title;
@@ -74,7 +78,9 @@ public:
         windowClass.lpfnWndProc = WindowProc;
         windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));
-        windowClass.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+        windowClass.hbrBackground = config_.frameless
+            ? reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH))
+            : GetSysColorBrush(COLOR_WINDOW);
         if (!RegisterClassW(&windowClass)) return 1;
 
         RECT work{};
@@ -94,10 +100,9 @@ public:
         if (config_.frameless) {
             const PCWSTR labels[] = { L"最小化", L"最大化", L"关闭" };
             for (int i = 0; i < 3; ++i) {
-                controls_[i] = CreateWindowExW(0, L"BUTTON", labels[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                controls_[i] = CreateWindowExW(0, L"BUTTON", labels[i], WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                     0, 0, 0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(101 + i)), instance, nullptr);
                 if (!controls_[i]) { DestroyWindow(window_); return 1; }
-                SendMessageW(controls_[i], WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
             }
             Resize();
         }
@@ -167,15 +172,20 @@ private:
                 ScreenToClient(window, &point);
                 RECT client{};
                 GetClientRect(window, &client);
-                const int grip = app->Scale(6);
+                const int grip = app->Scale(kResizeGrip);
                 if (!IsZoomed(window)) {
                     const bool left = point.x < grip, right = point.x >= client.right - grip;
                     if (point.y < grip) return left ? HTTOPLEFT : right ? HTTOPRIGHT : HTTOP;
                     if (point.y >= client.bottom - grip) return left ? HTBOTTOMLEFT : right ? HTBOTTOMRIGHT : HTBOTTOM;
                     if (left || right) return left ? HTLEFT : HTRIGHT;
                 }
-                if (point.y < app->Scale(36) && point.x < client.right - app->Scale(6) - 3 * app->Scale(58)) return HTCAPTION;
+                if (point.y < app->Scale(kControlBarHeight)
+                    && point.x < client.right - app->CaptionInset() - 3 * app->Scale(kCaptionButtonWidth)) return HTCAPTION;
                 return HTCLIENT;
+            }
+            if (message == WM_DRAWITEM && wParam >= 101 && wParam <= 103) {
+                app->DrawCaptionButton(*reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
+                return TRUE;
             }
             if (message == WM_COMMAND && lParam && HIWORD(wParam) == BN_CLICKED) {
                 switch (LOWORD(wParam)) {
@@ -208,22 +218,69 @@ private:
         return MulDiv(value, dpi ? dpi : 96, 96);
     }
 
+    int CaptionInset() const { return IsZoomed(window_) ? 0 : Scale(kResizeGrip); }
+
+    void DrawCaptionButton(const DRAWITEMSTRUCT& item) const {
+        const RECT& rect = item.rcItem;
+        const bool highContrast = [] {
+            HIGHCONTRASTW settings{ sizeof(settings) };
+            return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(settings), &settings, 0)
+                && (settings.dwFlags & HCF_HIGHCONTRASTON);
+        }();
+        const bool pressed = (item.itemState & ODS_SELECTED) != 0;
+        const bool close = item.CtlID == 103;
+        const COLORREF background = highContrast ? GetSysColor(pressed ? COLOR_HIGHLIGHT : COLOR_WINDOW)
+            : pressed ? (close ? RGB(175, 30, 40) : RGB(55, 55, 55)) : RGB(0, 0, 0);
+        const auto brush = CreateSolidBrush(background);
+        FillRect(item.hDC, &rect, brush);
+        DeleteObject(brush);
+
+        const int x = (rect.left + rect.right) / 2;
+        const int y = (rect.top + rect.bottom) / 2;
+        const int radius = Scale(5);
+        const auto pen = CreatePen(PS_SOLID, Scale(1),
+            highContrast ? GetSysColor(pressed ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT) : RGB(235, 235, 235));
+        const auto oldPen = SelectObject(item.hDC, pen);
+        const auto line = [&](int x1, int y1, int x2, int y2) {
+            MoveToEx(item.hDC, x1, y1, nullptr);
+            LineTo(item.hDC, x2, y2);
+        };
+        if (close) {
+            line(x - radius, y - radius, x + radius, y + radius);
+            line(x + radius, y - radius, x - radius, y + radius);
+        } else if (item.CtlID == 101) {
+            line(x - radius, y, x + radius + 1, y);
+        } else {
+            const auto oldBrush = SelectObject(item.hDC, GetStockObject(HOLLOW_BRUSH));
+            const int offset = IsZoomed(window_) ? Scale(2) : 0;
+            if (offset) {
+                line(x - radius + offset, y - radius, x + radius, y - radius);
+                line(x + radius, y - radius, x + radius, y + radius - offset);
+            }
+            Rectangle(item.hDC, x - radius, y - radius + offset, x + radius + 1 - offset, y + radius + 1);
+            SelectObject(item.hDC, oldBrush);
+        }
+        SelectObject(item.hDC, oldPen);
+        DeleteObject(pen);
+        if (item.itemState & ODS_FOCUS) DrawFocusRect(item.hDC, &rect);
+    }
+
     void Resize() {
         RECT bounds{};
         if (!GetClientRect(window_, &bounds)) return;
         if (config_.frameless) {
-            const int buttonWidth = Scale(58);
+            const int buttonWidth = Scale(kCaptionButtonWidth);
+            const int inset = CaptionInset();
             for (int i = 0; i < 3; ++i) {
-                if (controls_[i]) MoveWindow(controls_[i], bounds.right - Scale(6) - (3 - i) * buttonWidth,
-                    Scale(6), buttonWidth, Scale(27), TRUE);
+                if (controls_[i]) MoveWindow(controls_[i], bounds.right - inset - (3 - i) * buttonWidth,
+                    inset, buttonWidth, Scale(kControlBarHeight) - inset, TRUE);
             }
             if (controls_[1]) SetWindowTextW(controls_[1], IsZoomed(window_) ? L"还原" : L"最大化");
             // Keep the WebView off the title strip and the resize hit areas.
-            const int inset = IsZoomed(window_) ? 0 : Scale(6);
             bounds.left = inset;
             bounds.right = std::max<LONG>(inset, bounds.right - inset);
             bounds.bottom = std::max<LONG>(0, bounds.bottom - inset);
-            bounds.top = std::min<LONG>(bounds.bottom, Scale(36));
+            bounds.top = std::min<LONG>(bounds.bottom, Scale(kControlBarHeight));
         }
         if (controller_) controller_->put_Bounds(bounds);
     }
