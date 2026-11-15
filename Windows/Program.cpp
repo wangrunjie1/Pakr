@@ -16,11 +16,14 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-constexpr int kControlBarHeight = 36;
-constexpr int kCaptionButtonWidth = 46;
+constexpr int kCaptionHeight = 32;
+constexpr int kCaptionMargin = 10;
+constexpr int kCaptionGap = 4;
+constexpr UINT_PTR kCaptionTimer = 1;
+constexpr int kCaptionButtonWidth = 36;
 constexpr int kResizeGrip = 4;
-constexpr COLORREF kCaptionBackground = RGB(247, 248, 249);
-constexpr COLORREF kCaptionText = RGB(34, 39, 46);
+constexpr COLORREF kCaptionBackground = RGB(34, 38, 46);
+constexpr COLORREF kCaptionText = RGB(244, 246, 249);
 
 bool UseHighContrast() {
     HIGHCONTRASTW settings{ sizeof(settings) };
@@ -118,6 +121,10 @@ public:
             Resize();
         }
         ShowWindow(window_, config_.maximized ? SW_SHOWMAXIMIZED : show);
+        if (config_.frameless) {
+            captionIntroUntil_ = GetTickCount64() + 2400;
+            SetTimer(window_, kCaptionTimer, 50, nullptr);
+        }
         StartBrowser();
 
         MSG message{};
@@ -210,22 +217,20 @@ private:
                     if (point.y >= client.bottom - grip) return left ? HTBOTTOMLEFT : right ? HTBOTTOMRIGHT : HTBOTTOM;
                     if (left || right) return left ? HTLEFT : HTRIGHT;
                 }
-                if (point.y < app->Scale(kControlBarHeight)
-                    && point.x < client.right - app->CaptionInset() - 3 * app->Scale(kCaptionButtonWidth)) return HTCAPTION;
                 return HTCLIENT;
             }
             if (message == WM_DRAWITEM && wParam >= 101 && wParam <= 103) {
                 app->DrawCaptionButton(*reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
                 return TRUE;
             }
-            if (message == WM_PAINT) {
-                app->PaintCaption();
+            if (message == WM_TIMER && wParam == kCaptionTimer) {
+                app->UpdateCaptionVisibility();
                 return 0;
             }
             if (message == WM_COMMAND && lParam && HIWORD(wParam) == BN_CLICKED) {
                 switch (LOWORD(wParam)) {
-                    case 101: ShowWindow(window, SW_MINIMIZE); return 0;
-                    case 102: ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE); return 0;
+                    case 101: SetFocus(window); ShowWindow(window, SW_MINIMIZE); return 0;
+                    case 102: SetFocus(window); ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE); return 0;
                     case 103: SendMessageW(window, WM_CLOSE, 0, 0); return 0;
                 }
             }
@@ -236,6 +241,7 @@ private:
         }
         if (app && message == WM_CLOSE) app->SaveBounds();
         if (app && message == WM_DESTROY) {
+            if (app->config_.frameless) KillTimer(window, kCaptionTimer);
             app->window_ = nullptr;
             if (app->controller_) app->controller_->Close();
             app->controller_.Reset();
@@ -253,32 +259,29 @@ private:
         return MulDiv(value, dpi ? dpi : 96, 96);
     }
 
-    int CaptionInset() const { return IsZoomed(window_) ? 0 : Scale(kResizeGrip); }
-
-    void PaintCaption() const {
-        PAINTSTRUCT paint{};
-        const HDC dc = BeginPaint(window_, &paint);
-        RECT bar{};
-        GetClientRect(window_, &bar);
-        bar.bottom = std::min<LONG>(bar.bottom, Scale(kControlBarHeight));
-        const bool highContrast = UseHighContrast();
-        const auto brush = CreateSolidBrush(highContrast ? GetSysColor(COLOR_WINDOW) : kCaptionBackground);
-        FillRect(dc, &bar, brush);
-        DeleteObject(brush);
-        RECT title = bar;
-        title.left += Scale(14);
-        title.right -= 3 * Scale(kCaptionButtonWidth) + CaptionInset() + Scale(8);
-        if (title.right > title.left) {
-            const auto font = CreateFontW(-Scale(13), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-            const auto oldFont = SelectObject(dc, font ? reinterpret_cast<HGDIOBJ>(font) : GetStockObject(DEFAULT_GUI_FONT));
-            SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, highContrast ? GetSysColor(COLOR_WINDOWTEXT) : kCaptionText);
-            DrawTextW(dc, config_.title.c_str(), -1, &title, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
-            SelectObject(dc, oldFont);
-            if (font) DeleteObject(font);
+    void UpdateCaptionVisibility() {
+        RECT client{};
+        POINT cursor{};
+        bool nearCorner = false;
+        if (GetClientRect(window_, &client) && GetCursorPos(&cursor)) {
+            const HWND hovered = WindowFromPoint(cursor);
+            if (hovered == window_ || IsChild(window_, hovered)) {
+                ScreenToClient(window_, &cursor);
+                const int areaWidth = 3 * Scale(kCaptionButtonWidth + kCaptionGap) + Scale(2 * kCaptionMargin);
+                nearCorner = cursor.x >= client.right - areaWidth && cursor.x < client.right
+                    && cursor.y >= 0 && cursor.y < Scale(kCaptionHeight + 2 * kCaptionMargin);
+            }
         }
-        EndPaint(window_, &paint);
+        const HWND focus = GetFocus();
+        const bool focused = focus == controls_[0] || focus == controls_[1] || focus == controls_[2];
+        const bool visible = !IsIconic(window_) && (nearCorner || focused || GetTickCount64() < captionIntroUntil_);
+        if (visible == captionVisible_) return;
+        captionVisible_ = visible;
+        for (HWND button : controls_) {
+            if (visible) SetWindowPos(button, HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            else ShowWindow(button, SW_HIDE);
+        }
     }
 
     void DrawCaptionButton(const DRAWITEMSTRUCT& item) const {
@@ -289,7 +292,7 @@ private:
         const bool close = item.CtlID == 103;
         const COLORREF background = highContrast ? GetSysColor(highlighted ? COLOR_HIGHLIGHT : COLOR_WINDOW)
             : close && highlighted ? (pressed ? RGB(179, 24, 39) : RGB(199, 29, 47))
-            : pressed ? RGB(218, 223, 228) : highlighted ? RGB(230, 233, 237) : kCaptionBackground;
+            : pressed ? RGB(71, 82, 99) : highlighted ? RGB(57, 67, 82) : kCaptionBackground;
         const auto brush = CreateSolidBrush(background);
         FillRect(item.hDC, &rect, brush);
         DeleteObject(brush);
@@ -330,18 +333,21 @@ private:
         if (!GetClientRect(window_, &bounds)) return;
         if (config_.frameless) {
             UpdateWindowCorners();
-            const int buttonWidth = Scale(kCaptionButtonWidth);
-            const int inset = CaptionInset();
-            for (int i = 0; i < 3; ++i) {
-                if (controls_[i]) MoveWindow(controls_[i], bounds.right - inset - (3 - i) * buttonWidth,
-                    inset, buttonWidth, Scale(kControlBarHeight) - inset, TRUE);
-            }
-            if (controls_[1]) SetWindowTextW(controls_[1], IsZoomed(window_) ? L"还原" : L"最大化");
-            bounds.top = std::min<LONG>(bounds.bottom, Scale(kControlBarHeight));
-            const RECT caption{ 0, 0, bounds.right, bounds.top };
-            InvalidateRect(window_, &caption, FALSE);
         }
         if (controller_) controller_->put_Bounds(bounds);
+        if (!config_.frameless) return;
+        const int buttonWidth = Scale(kCaptionButtonWidth);
+        const int height = Scale(kCaptionHeight);
+        const int margin = Scale(kCaptionMargin);
+        const int stride = buttonWidth + Scale(kCaptionGap);
+        for (int i = 0; i < 3; ++i) {
+            if (!controls_[i]) continue;
+            SetWindowPos(controls_[i], HWND_TOP, bounds.right - margin - buttonWidth - (2 - i) * stride,
+                margin, buttonWidth, height, SWP_NOACTIVATE);
+            const auto region = CreateRoundRectRgn(0, 0, buttonWidth, height, Scale(12), Scale(12));
+            if (region && !SetWindowRgn(controls_[i], region, TRUE)) DeleteObject(region);
+        }
+        if (controls_[1]) SetWindowTextW(controls_[1], IsZoomed(window_) ? L"还原" : L"最大化");
     }
 
     void UpdateWindowCorners() {
@@ -452,6 +458,8 @@ private:
     const AppConfig& config_;
     HWND window_ = nullptr;
     HWND controls_[3]{};
+    bool captionVisible_ = true;
+    ULONGLONG captionIntroUntil_ = 0;
     HWND hoveredControl_ = nullptr;
     LONG cornerWidth_ = 0, cornerHeight_ = 0;
     int cornerDiameter_ = -1;
