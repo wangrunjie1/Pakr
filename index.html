@@ -438,6 +438,11 @@ footer{border-top-color:var(--border);color:var(--faint)}
 .platform-picker button[aria-pressed="true"]{background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .platform-picker button:disabled{cursor:default;opacity:.65}
 [hidden]{display:none!important}
+.window-options{margin:12px 0;padding:10px 12px;border:1px solid var(--border);border-radius:10px}
+.window-options summary{cursor:pointer;font-size:13px;font-weight:600}
+.window-sizes{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.window-sizes button{font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:7px;background:transparent;cursor:pointer}
+.window-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 
 </style>
 </head>
@@ -503,6 +508,20 @@ footer{border-top-color:var(--border);color:var(--faint)}
               <img id="iconImg" alt="icon">
             </div>
           </div>
+
+          <details class="window-options" id="windowsOptions" hidden>
+            <summary>窗口设置</summary>
+            <div class="window-sizes" role="group" aria-label="启动尺寸预设">
+              <button type="button" data-window-size="1100,760">默认 1100 × 760</button>
+              <button type="button" data-window-size="1280,720">宽屏 1280 × 720</button>
+              <button type="button" data-window-size="480,800">竖屏 480 × 800</button>
+            </div>
+            <div class="window-fields">
+              <div class="field"><label for="f_width">宽度（px）</label><input id="f_width" type="number" min="360" max="3840" step="1" value="1100"></div>
+              <div class="field"><label for="f_height">高度（px）</label><input id="f_height" type="number" min="280" max="2160" step="1" value="760"></div>
+            </div>
+            <label class="toggle-label" for="f_maximized"><input type="checkbox" id="f_maximized"> 启动时最大化</label>
+          </details>
 
           <div class="toggle-field" data-android-only>
             <label class="toggle-label" for="f_pull_refresh">
@@ -682,11 +701,17 @@ function setPlatform(next) {
   platformButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.platform === platform)));
   document.querySelectorAll('[data-android-only]').forEach(element => { element.hidden = windows; });
   document.getElementById('windowsHint').hidden = !windows;
+  document.getElementById('windowsOptions').hidden = !windows;
   document.getElementById('appIdLabel').textContent = windows ? '应用标识' : '包名';
 }
 platformButtons.forEach(button => button.addEventListener('click', () => {
   setPlatform(button.dataset.platform);
   saveForm();
+}));
+const windowWidth = document.getElementById('f_width');
+const windowHeight = document.getElementById('f_height');
+document.querySelectorAll('[data-window-size]').forEach(button => button.addEventListener('click', () => {
+  [windowWidth.value, windowHeight.value] = button.dataset.windowSize.split(',');
 }));
 
 function setBusy(v){
@@ -752,6 +777,21 @@ async function handleBuildClick(){
     icon_url:      document.getElementById('f_icon').value.trim(),
     pull_to_refresh: document.getElementById('f_pull_refresh').checked,
   };
+
+  if (platform === 'windows') {
+    const width = windowWidth.valueAsNumber;
+    const height = windowHeight.valueAsNumber;
+    if (!Number.isInteger(width) || width < 360 || width > 3840 ||
+        !Number.isInteger(height) || height < 280 || height > 2160) {
+      document.getElementById('windowsOptions').open = true;
+      const invalid = !Number.isInteger(width) || width < 360 || width > 3840 ? windowWidth : windowHeight;
+      invalid.setCustomValidity('请输入允许范围内的整数像素值');
+      invalid.reportValidity();
+      invalid.setCustomValidity('');
+      return;
+    }
+    data.window_options = [width, height, Number(document.getElementById('f_maximized').checked), 0].join(',');
+  }
 
   setBusy(true);
   const windows = data.platform === 'windows';
